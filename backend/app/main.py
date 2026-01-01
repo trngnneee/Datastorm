@@ -1,9 +1,13 @@
-from fastapi import FastAPI, Query, Depends
+from fastapi import FastAPI, Query, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
 from .model.sales_fact import SalesFact
 from .utils.db import get_db
 from fastapi.middleware.cors import CORSMiddleware
+import httpx
+from datetime import datetime, timedelta
+import httpx
+from datetime import datetime, timedelta
 
 app = FastAPI(
     title="FMCG Sales Data API",
@@ -306,3 +310,84 @@ def get_net_sales_by_location(
             if r.latitude is not None and r.longitude is not None
         ],
     }
+
+@app.post("/predict")
+async def predict(
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    try:
+        store_id = request['store_id']
+        sku_id = request['sku_id']
+        date_str = request['date']  # 'YYYY-MM-DD'
+        date = datetime.strptime(date_str, '%Y-%m-%d').date()
+
+        # Calculate lags
+        lag_dates = {
+            'lag_1': date - timedelta(days=1),
+            'lag_7': date - timedelta(days=7),
+            'lag_14': date - timedelta(days=14),
+            'lag_28': date - timedelta(days=28),
+        }
+
+        lags = {}
+        for lag_name, lag_date in lag_dates.items():
+            row = db.query(SalesFact.units_sold).filter(
+                SalesFact.store_id == store_id,
+                SalesFact.sku_id == sku_id,
+                SalesFact.date == lag_date
+            ).first()
+            lags[lag_name] = float(row.units_sold) if row else 0.0
+
+        # Rolling mean 7: average from date-6 to date
+        rolling_7_start = date - timedelta(days=6)
+        rolling_7_rows = db.query(SalesFact.units_sold).filter(
+            SalesFact.store_id == store_id,
+            SalesFact.sku_id == sku_id,
+            SalesFact.date >= rolling_7_start,
+            SalesFact.date <= date
+        ).all()
+        rolling_mean_7 = sum(r.units_sold for r in rolling_7_rows) / len(rolling_7_rows) if rolling_7_rows else 0.0
+
+        # Rolling mean 30: from date-29 to date
+        rolling_30_start = date - timedelta(days=29)
+        rolling_30_rows = db.query(SalesFact.units_sold).filter(
+            SalesFact.store_id == store_id,
+            SalesFact.sku_id == sku_id,
+            SalesFact.date >= rolling_30_start,
+            SalesFact.date <= date
+        ).all()
+        rolling_mean_30 = sum(r.units_sold for r in rolling_30_rows) / len(rolling_30_rows) if rolling_30_rows else 0.0
+
+        # Build the body
+        body = {
+            "horizon": request.get('horizon', 14),
+            "month": request['month'],
+            "weekday": request['weekday'],
+            "is_weekend": request['is_weekend'],
+            "is_holiday": request['is_holiday'],
+            "temperature": request['temperature'],
+            "list_price": request['list_price'],
+            "discount_pct": request['discount_pct'],
+            "promo_flag": request['promo_flag'],
+            "store_id": store_id,
+            "sku_id": sku_id,
+            "category": request['category'],
+            "brand": request['brand'],
+            **lags,
+            "rolling_mean_7": rolling_mean_7,
+            "rolling_mean_30": rolling_mean_30
+        }
+
+        # Send to AI server
+        async with httpx.AsyncClient() as client:
+            response = await client.post("http://localhost:8000/predict", json=body)
+            response.raise_for_status()
+            return response.json()
+
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=f"Missing field: {e}")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
