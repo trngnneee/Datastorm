@@ -21,7 +21,8 @@
     "react-map-gl": "^8.1.0",
     "recharts": "^3.6.0",
     "sonner": "^2.0.7",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

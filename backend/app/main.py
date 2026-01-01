@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Query, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case
 from .model.sales_fact import SalesFact
 from .utils.db import get_db
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,21 +33,27 @@ def get_rows(
         "countries": result
     }
 
-@app.get("/net_sales/{country}/daily")
+@app.get("/net_sales/daily")
 def get_net_sales(
-    country: str,
+    country: str = Query("all", description="Country to filter by"),
     db: Session = Depends(get_db),
-    year: str = Query("all", description="Filter by year, use 'all' for no filter")
+    year: str = Query("all", description="Filter by year, use 'all' for no filter"),
+    month: str = Query("all", description="Filter by month, use 'all' for no filter"),
 ):
     query = db.query(
         SalesFact.date,
         func.sum(SalesFact.net_sales).label("net_sales")
-    ).filter(SalesFact.country == country)
+    )
 
     yearList = db.query(func.extract("year", SalesFact.date).distinct()).order_by(func.extract("year", SalesFact.date)).all()
 
+    if country != "all":
+        query = query.filter(SalesFact.country == country)
+
     if year != "all":
         query = query.filter(func.extract("year", SalesFact.date) == int(year))
+    if month != "all":
+        query = query.filter(func.extract("month", SalesFact.date) == int(month))
 
     rows = query.group_by(SalesFact.date).order_by(SalesFact.date).all()
 
@@ -64,4 +70,239 @@ def get_net_sales(
             {"date": r.date, "net_sales": float(r.net_sales)}
             for r in rows
         ]
+    }
+
+@app.get("/unit_sold/daily")
+def get_units_sold(
+    country: str = Query("all", description="Country to filter by"),
+    db: Session = Depends(get_db),
+    year: str = Query("all", description="Filter by year, use 'all' for no filter"),
+    month: str = Query("all", description="Filter by month, use 'all' for no filter"),
+):
+    query = db.query(
+        SalesFact.date,
+        func.sum(SalesFact.units_sold).label("units_sold")
+    )
+
+    yearList = db.query(func.extract("year", SalesFact.date).distinct()).order_by(func.extract("year", SalesFact.date)).all()
+
+    if country != "all":
+        query = query.filter(SalesFact.country == country)
+
+    if year != "all":
+        query = query.filter(func.extract("year", SalesFact.date) == int(year))
+    if month != "all":
+        query = query.filter(func.extract("month", SalesFact.date) == int(month))
+
+    rows = query.group_by(SalesFact.date).order_by(SalesFact.date).all()
+
+    start_date = rows[0].date if rows else None
+    end_date = rows[-1].date if rows else None
+
+    return {
+        "meta": {
+            "startDate": start_date,
+            "endDate": end_date,
+            "yearList": [int(y[0]) for y in yearList]
+        },
+        "data": [
+            {"date": r.date, "units_sold": int(r.units_sold)}
+            for r in rows
+        ]
+    }
+
+@app.get("/net_sales/category")
+def get_net_sales_by_category(
+    country: str = Query("all", description="Country to filter by"),
+    db: Session = Depends(get_db),
+    year: str = Query("all", description="Filter by year, use 'all' for no filter"),
+    month: str = Query("all", description="Filter by month, use 'all' for no filter"),
+):
+    query = db.query(
+        SalesFact.category,
+        func.sum(SalesFact.net_sales).label("net_sales")
+    )
+
+    if country != "all":
+        query = query.filter(SalesFact.country == country)
+
+    if year != "all":
+        query = query.filter(func.extract("year", SalesFact.date) == int(year))
+    if month != "all":
+        query = query.filter(func.extract("month", SalesFact.date) == int(month))
+
+    rows = query.group_by(SalesFact.category).order_by(SalesFact.category).all()
+
+    return {
+        "data": [
+            {"category": r.category, "net_sales": float(r.net_sales)}
+            for r in rows
+        ]
+    }
+
+@app.get("/unit_sold/holiday_weekday")
+def get_unit_sold_statistics(
+    country: str = Query("all", description="Country to filter by"),
+    db: Session = Depends(get_db),
+    year: str = Query("all", description="Filter by year, use 'all' for no filter"),
+    month: str = Query("all", description="Filter by month, use 'all' for no filter"),
+):
+    groups = {
+        "weekday": lambda q: q.where(SalesFact.is_weekend == False),
+        "weekend": lambda q: q.where(SalesFact.is_weekend == True),
+        "holiday": lambda q: q.where(SalesFact.is_holiday == True),
+        "non_holiday": lambda q: q.where(SalesFact.is_holiday == False),
+    }
+
+    result = {}
+
+    for name, filter_fn in groups.items():
+        query = db.query(
+            func.sum(SalesFact.units_sold).label("total_units_sold"),
+        )
+
+        query = filter_fn(query)
+
+        if country != "all":
+            query = query.filter(SalesFact.country == country)
+        if year != "all":
+            query = query.filter(func.extract("year", SalesFact.date) == int(year))
+        if month != "all":
+            query = query.filter(func.extract("month", SalesFact.date) == int(month))
+
+        res = query.one()
+
+        result[name] = {
+            "total_units_sold": int(res.total_units_sold) if res.total_units_sold is not None else 0
+        }
+
+    return result
+
+@app.get("/sku/top")
+def get_top_skus(
+    country: str = Query("all", description="Country to filter by"),
+    db: Session = Depends(get_db),
+    year: str = Query("all", description="Filter by year, use 'all' for no filter"),
+    month: str = Query("all", description="Filter by month, use 'all' for no filter"),
+    limit: int = Query(20, description="Number of top SKUs to return"),
+):
+    query = db.query(
+        SalesFact.sku_id,
+        SalesFact.sku_name,
+        func.sum(SalesFact.units_sold).label("units_sold")
+    )
+
+    if country != "all":
+        query = query.filter(SalesFact.country == country)
+
+    if year != "all":
+        query = query.filter(func.extract("year", SalesFact.date) == int(year))
+
+    if month != "all":
+        query = query.filter(func.extract("month", SalesFact.date) == int(month))
+
+    rows = query.group_by(SalesFact.sku_id, SalesFact.sku_name).order_by(func.sum(SalesFact.units_sold).desc()).limit(limit).all()
+
+    return {
+        "data": [
+            {"sku_id": r.sku_id, "sku_name": r.sku_name, "units_sold": int(r.units_sold)}
+            for r in rows
+        ]
+    }
+
+@app.get("/unit_sold/promo")
+def get_units_sold_discount_scatter(
+    country: str = Query("all", description="Country to filter by"),
+    db: Session = Depends(get_db),
+    year: str = Query("all", description="Filter by year, use 'all' for no filter"),
+    month: str = Query("all", description="Filter by month, use 'all' for no filter"),
+):
+    query = db.query(
+        SalesFact.promo_flag,
+        func.sum(SalesFact.units_sold).label("units_sold"),
+        func.sum(SalesFact.net_sales).label("net_sales"),
+    )
+
+    if country != "all":
+        query = query.filter(SalesFact.country == country)
+
+    if year != "all":
+        query = query.filter(func.extract("year", SalesFact.date) == int(year))
+
+    if month != "all":
+        query = query.filter(func.extract("month", SalesFact.date) == int(month))
+
+    rows = (
+        query
+        .group_by(SalesFact.promo_flag)
+        .all()
+    )
+
+    return {
+        "data": [
+            {
+                "promo_flag": r.promo_flag,
+                "units_sold": int(r.units_sold),
+                "net_sales": float(r.net_sales)
+            }
+            for r in rows
+        ]
+    }
+
+@app.get("/net_sales/location")
+def get_net_sales_by_location(
+    country: str = Query("all"),
+    db: Session = Depends(get_db),
+    year: str = Query("all"),
+    month: str = Query("all"),
+):
+    query = db.query(
+        SalesFact.store_id,
+        SalesFact.latitude,
+        SalesFact.longitude,
+        func.sum(SalesFact.net_sales).label("net_sales"),
+        func.sum(SalesFact.units_sold).label("units_sold"),
+        func.sum(SalesFact.stock_on_hand).label("stock_on_hand"),
+        (
+            func.sum(SalesFact.stock_on_hand) /
+            func.nullif(
+                func.sum(SalesFact.stock_on_hand) + func.sum(SalesFact.units_sold),
+                0
+            )
+        ).label("stock_out_rate")
+    )
+
+    if country != "all":
+        query = query.filter(SalesFact.country == country)
+
+    if year != "all":
+        query = query.filter(func.extract("year", SalesFact.date) == int(year))
+
+    if month != "all":
+        query = query.filter(func.extract("month", SalesFact.date) == int(month))
+
+    rows = query.group_by(
+        SalesFact.store_id,
+        SalesFact.latitude,
+        SalesFact.longitude
+    ).all()
+
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [r.longitude, r.latitude],
+                },
+                "properties": {
+                    "store_id": r.store_id,
+                    "net_sales": float(r.net_sales),
+                    "stock_out_rate": float(r.stock_out_rate or 0),
+                },
+            }
+            for r in rows
+            if r.latitude is not None and r.longitude is not None
+        ],
     }

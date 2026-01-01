@@ -1,14 +1,8 @@
 "use client"
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { useEffect, useState } from "react"
 
+import { useEffect, useState } from "react"
+import { useFilterStore } from "../../../../store/useFilterStore"
 import {
   LineChart,
   Line,
@@ -18,41 +12,59 @@ import {
   CartesianGrid,
   ResponsiveContainer,
   ReferenceArea,
+  Legend,
 } from "recharts"
 import { toast } from "sonner"
-import { Label } from "@/components/ui/label"
-import { Calendar, Filter, Flag } from "lucide-react"
 
 export const NetSales = () => {
-  const [countries, setCountries] = useState([])
-  const [yearList, setYearList] = useState([])
-  useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/country`)
-      .then((res) => res.json())
-      .then((data) => {
-        setCountries(data.countries)
-      })
-  }, [])
+  const selectedCountry = useFilterStore((state) => state.selectedCountry)
 
-  const [selectedCountry, setSelectedCountry] = useState("all")
-  const [selectedYear, setSelectedYear] = useState("all")
+  const selectedYear = useFilterStore((state) => state.selectedYear)
+  const setSelectedYear = useFilterStore((state) => state.setSelectedYear)
+
+  const selectedMonth = useFilterStore((state) => state.selectedMonth)
+
+  const setYearList = useFilterStore((state) => state.setYearList)
+
   const [netSalesData, setNetSalesData] = useState([])
-  const [startDate, setStartDate] = useState(null)
-  const [endDate, setEndDate] = useState(null)
+  const [unitSoldData, setUnitSoldData] = useState([])
+  const startDate = useFilterStore((state) => state.startDate)
+  const endDate = useFilterStore((state) => state.endDate)
+  const setStartDate = useFilterStore((state) => state.setStartDate)
+  const setEndDate = useFilterStore((state) => state.setEndDate)
   useEffect(() => {
-    toast.loading("Fetching data...")
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/net_sales/${selectedCountry}/daily?year=${selectedYear}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setNetSalesData(data.data);
-        setStartDate(data.meta.startDate);
-        setEndDate(data.meta.endDate);
-        setYearList(data.meta.yearList);
-      })
-      .finally(() => {
-        toast.dismiss()
-      })
-  }, [selectedCountry, selectedYear])
+    const fetchData = async () => {
+      const toastId = toast.loading("Fetching data...")
+      try {
+        let yearQuery = selectedYear || ""
+        const [netRes, unitRes] = await Promise.all([
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/net_sales/daily?country=${selectedCountry}&year=${yearQuery}&month=${selectedMonth}`),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/unit_sold/daily?country=${selectedCountry}&year=${yearQuery}&month=${selectedMonth}`)
+        ])
+
+        const netData = await netRes.json()
+        const unitData = await unitRes.json()
+
+        setNetSalesData(netData.data)
+        setUnitSoldData(unitData.data)
+        setStartDate(netData.meta.startDate)
+        setEndDate(netData.meta.endDate)
+        setYearList(netData.meta.yearList)
+
+        if (!selectedYear && netData.meta.yearList?.length > 0) {
+          setSelectedYear(netData.meta.yearList[0])
+        }
+
+        toast.success("Data fetched successfully!", { id: toastId })
+      } catch (err) {
+        console.error(err)
+        toast.error("Failed to fetch data!", { id: toastId })
+      }
+    }
+
+    fetchData()
+  }, [selectedCountry, selectedYear, selectedMonth])
+
 
   const years =
     startDate && endDate
@@ -62,61 +74,17 @@ export const NetSales = () => {
       )
       : []
   const yearColors = ["#3b82f6", "#22c55e", "#f97316"]
+  const mergedData = netSalesData.map((item, index) => ({
+    ...item,
+    unit_sold: unitSoldData[index]?.units_sold || 0,
+  }));
 
   return (
     <>
-      <div className="mb-4 bg-white p-4 rounded-md shadow-md border border-gray-300 w-full">
-        <div className="flex items-center gap-5 text-[20px] mb-5">
-          <Filter />
-          <span>
-            Filter
-          </span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="w-full">
-            <Label htmlFor="country-select" className="flex items-center gap-3 text-[16px] mb-2"><Flag size={14} />Country</Label>
-            <Select value={selectedCountry} onValueChange={setSelectedCountry} className="mb-4" id="country-select">
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select country" />
-              </SelectTrigger>
-
-              <SelectContent>
-                <SelectItem value="all">All Countries</SelectItem>
-                {Array.isArray(countries)
-                  ? countries.map((country) => (
-                    <SelectItem key={country} value={country}>
-                      {country}
-                    </SelectItem>
-                  ))
-                  : null}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="w-full">
-            <Label htmlFor="year-select" className="flex items-center gap-3 text-[16px] mb-2"><Calendar size={14} />Year</Label>
-            <Select value={selectedYear} onValueChange={setSelectedYear} disabled={!years.length} className="mb-4" id="year-select">
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select year" />
-              </SelectTrigger>
-
-              <SelectContent>
-                <SelectItem value="all">All Years</SelectItem>
-                {Array.isArray(yearList)
-                  ? yearList.map((year) => (
-                    <SelectItem key={year} value={year}>
-                      {year}
-                    </SelectItem>
-                  ))
-                  : null}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </div>
       <div className="bg-white p-5 rounded-md shadow-md border border-gray-300 w-full">
-        <div className="text-center">Net Sales over time</div>
+        <div className="text-center text-xl">Net Sales - {selectedMonth !== "all" ? selectedMonth : "All Months"}/{selectedYear !== "all" ? selectedYear : "All Years"} - {selectedCountry !== "all" ? selectedCountry : "All Countries"}</div>
         <ResponsiveContainer width="100%" height={350}>
-          <LineChart data={netSalesData}>
+          <LineChart data={mergedData}>
             <CartesianGrid strokeDasharray="3 3" />
 
             <XAxis
@@ -126,6 +94,7 @@ export const NetSales = () => {
             />
 
             <YAxis tick={{ fontSize: 12 }} />
+            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
 
             <Tooltip />
 
@@ -146,6 +115,15 @@ export const NetSales = () => {
               strokeWidth={2}
               dot={false}
             />
+            <Line
+              yAxisId="right"
+              type="monotone"
+              dataKey="unit_sold"
+              stroke="#f59e0b"
+              strokeWidth={2}
+              dot={false}
+            />
+            <Legend verticalAlign="bottom" align="center" />
           </LineChart>
         </ResponsiveContainer>
       </div>
