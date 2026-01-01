@@ -23,6 +23,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/information")
+def get_information(db: Session = Depends(get_db)):
+    # Gộp tất cả tính toán vào một query duy nhất
+    result = db.query(
+        func.count(func.distinct(SalesFact.country)).label("number_of_countries"),
+        func.sum(SalesFact.net_sales).label("total_net_sales"),
+        func.count(func.distinct(SalesFact.store_id)).label("total_stores"),
+        func.count(func.distinct(SalesFact.sku_id)).label("total_products"),
+        func.count(func.distinct(SalesFact.date)).label("number_of_days"),
+    ).one()
+
+    return {
+        "number_of_countries": result.number_of_countries,
+        "total_net_sales": float(result.total_net_sales or 0),
+        "total_stores": result.total_stores,
+        "total_products": result.total_products,
+        "number_of_days": result.number_of_days,
+    }
+    
+
 @app.get("/country")
 def get_rows(
     db: Session = Depends(get_db)
@@ -80,6 +100,10 @@ def get_units_sold(
     db: Session = Depends(get_db),
     year: str = Query("all", description="Filter by year, use 'all' for no filter"),
     month: str = Query("all", description="Filter by month, use 'all' for no filter"),
+    store: str = Query("all", description="Filter by store, use 'all' for no filter"),
+    category: str = Query("all", description="Filter by category, use 'all' for no filter"),
+    brand: str = Query("all", description="Filter by brand, use 'all' for no filter"),
+    sku_id: str = Query("all", description="Filter by SKU ID, use 'all' for no filter"),
 ):
     query = db.query(
         SalesFact.date,
@@ -93,8 +117,21 @@ def get_units_sold(
 
     if year != "all":
         query = query.filter(func.extract("year", SalesFact.date) == int(year))
+
     if month != "all":
         query = query.filter(func.extract("month", SalesFact.date) == int(month))
+
+    if store != "all":
+        query = query.filter(SalesFact.store_id == store)
+
+    if category != "all":
+        query = query.filter(SalesFact.category == category)
+
+    if brand != "all":
+        query = query.filter(SalesFact.brand == brand)
+
+    if sku_id != "all":
+        query = query.filter(SalesFact.sku_id == sku_id)
 
     rows = query.group_by(SalesFact.date).order_by(SalesFact.date).all()
 
@@ -302,7 +339,7 @@ def get_net_sales_by_location(
         ],
     }
 
-@app.post("/predict")
+@app.post("/predict_unit_sold")
 async def predict(
     request: dict,
     db: Session = Depends(get_db)
@@ -364,10 +401,9 @@ async def predict(
             "rolling_mean_7": rolling_mean_7,
             "rolling_mean_30": rolling_mean_30
         }
-        print("Stage 6")
         # Send to AI server
         async with httpx.AsyncClient() as client:
-            response = await client.post("http://localhost:8001/predict", json=body)
+            response = await client.post("http://localhost:8001/predict_unit_sold", json=body)
             response.raise_for_status()
             return response.json()
 
@@ -378,73 +414,141 @@ async def predict(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.get("/store/list")
+@app.get('/store/list')
 def get_store_list(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db)
 ):
-    query = db.query(
+    stores = db.query(
         SalesFact.store_id,
-    ).distinct()
-
-    rows = query.order_by(SalesFact.store_id).all()
+    ).distinct().all()
 
     return {
-        "data": [r.store_id for r in rows]
+        "data": [s[0] for s in stores if s[0] is not None]
     }
 
-@app.get("/category/list")
-def get_store_category_list(
-    db: Session = Depends(get_db),
+@app.get('/category/list')
+def get_category_list(
+    db: Session = Depends(get_db)
 ):
-    query = db.query(
-        SalesFact.category,
-    ).distinct()
+    categories = db.query(
+        SalesFact.category
+    ).distinct().all()
 
-    rows = query.order_by(SalesFact.category).all()
+    result = [c[0] for c in categories if c[0] is not None]
 
     return {
-        "data": [r.category for r in rows]
+        "data": result
     }
 
-@app.get("/brand/list")
+@app.get('/brand/list')
 def get_brand_list(
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db)
 ):
-    query = db.query(
-        SalesFact.brand,
-    ).distinct()
+    brands = db.query(
+        SalesFact.brand
+    ).distinct().all()
 
-    rows = query.order_by(SalesFact.brand).all()
+    result = [b[0] for b in brands if b[0] is not None]
 
     return {
-        "data": [r.brand for r in rows]
+        "data": result
     }
 
-@app.get("/product/list")
+@app.get('/product/list')
 def get_product_list(
-    db: Session = Depends(get_db),
-    store: str = Query(..., description="Store ID to filter by"),
-    category: str = Query(..., description="Category to filter by"),
-    brand: str = Query(..., description="Brand to filter by"),
+    category: str = Query(None, description="Filter by category"),
+    brand: str = Query(None, description="Filter by brand"),
+    db: Session = Depends(get_db)
 ):
     query = db.query(
         SalesFact.sku_id,
-        SalesFact.sku_name,
-        SalesFact.list_price
+        SalesFact.sku_name
     ).distinct()
 
-    if store:
-        query = query.filter(SalesFact.store_id == store)
     if category:
         query = query.filter(SalesFact.category == category)
     if brand:
         query = query.filter(SalesFact.brand == brand)
 
-    rows = query.order_by(SalesFact.sku_id).all()
+    products = query.all()
+
+    result = [
+        {"sku_id": p.sku_id, "sku_name": p.sku_name}
+        for p in products
+    ]
 
     return {
-        "data": [
-            {"sku_id": r.sku_id, "sku_name": r.sku_name, "list_price": float(r.list_price)}
-            for r in rows
-        ]
+        "data": result
+    }
+
+@app.post("/predict_lead_time")
+async def predict_lead_time(
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    try:
+        # Build the body with all provided features
+        body = {
+            "date": request['date'],
+            "year": request['year'],
+            "month": request['month'],
+            "day": request['day'],
+            "weekofyear": request['weekofyear'],
+            "weekday": request['weekday'],
+            "is_weekend": request['is_weekend'],
+            "is_holiday": request['is_holiday'],
+            "temperature": request['temperature'],
+            "rain_mm": request['rain_mm'],
+            "store_id": request['store_id'],
+            "country": request['country'],
+            "city": request['city'],
+            "channel": request['channel'],
+            "latitude": request['latitude'],
+            "longitude": request['longitude'],
+            "sku_id": request['sku_id'],
+            "sku_name": request['sku_name'],
+            "category": request['category'],
+            "subcategory": request['subcategory'],
+            "brand": request['brand'],
+            "supplier_id": request['supplier_id']
+        }
+
+        # Send to AI server
+        async with httpx.AsyncClient() as client:
+            response = await client.post("http://localhost:8001/predict_lead_time", json=body)
+            response.raise_for_status()
+            return response.json()
+
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=f"Missing field: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get('/detail')
+def get_sales_fact_detail(
+    store_id: str = Query(..., description="Store ID"),
+    sku_id: str = Query(..., description="SKU ID"),
+    db: Session = Depends(get_db)
+):
+    row = db.query(SalesFact).filter(
+        SalesFact.store_id == store_id,
+        SalesFact.sku_id == sku_id
+    ).first()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Sales fact not found")
+
+    return {
+        "store_id": row.store_id,
+        "sku_id": row.sku_id,
+        "sku_name": row.sku_name,
+        "category": row.category,
+        "subcategory": row.subcategory,
+        "brand": row.brand,
+        "country": row.country,
+        "city": row.city,
+        "channel": row.channel,
+        "latitude": row.latitude,
+        "longitude": row.longitude,
+        "supplier_id": row.supplier_id
     }

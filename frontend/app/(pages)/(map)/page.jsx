@@ -18,7 +18,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Calendar, Filter, Flag } from "lucide-react";
 import { useFilterStore } from "@/app/store/useFilterStore";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Title } from "./components/Title"
 import { DemandForecast } from "./components/DemandForecast/DemandForecast";
 
@@ -39,12 +39,21 @@ export default function MapPage() {
 
   const yearList = useFilterStore((state) => state.yearList);
 
+  const [information, setInformation] = useState(null);
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/country`)
-      .then((res) => res.json())
-      .then((data) => {
-        setCountries(data.countries);
-      });
+    const fetchData = async () => {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/country`)
+        .then((res) => res.json())
+        .then((data) => {
+          setCountries(data.countries);
+        });
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/information`)
+        .then((res) => res.json())
+        .then((data) => {
+          setInformation(data);
+        });
+    }
+    fetchData();
   }, []);
 
   const monthList = [
@@ -86,56 +95,61 @@ export default function MapPage() {
         </div>
         <div className="absolute top-10 w-full">
           <div className="relative flex items-center text-white font-extrabold text-[55px] w-full">
-            <h1 className="z-10 pl-15 text-[30px]">DOM Team</h1>
+            <div className="w-30 h-30 absolute left-20 -top-5">
+              <img
+                src="/logo.png"
+                className="w-full h-full object-contain rounded-xl"
+              />
+            </div>
 
-            <div className="absolute left-1/2 -translate-x-1/2 text-nowrap">
+            <div className="absolute left-1/2 -translate-x-1/2 text-nowrap mt-20">
               Sale Management Dashboard
             </div>
           </div>
         </div>
       </div>
-      <div className="container mx-auto relative mb-50">
+      <div className="container mx-auto relative">
         <div className="-mt-50 z-10 absolute flex justify-center text-white w-full">
           <div className="bg-[#ffffff3f] py-3 px-10 rounded-md border border-white shadow-md flex items-center justify-center gap-10">
             <div className="flex items-center gap-5 border-r border-r-white pr-20">
               {/* <Warehouse size={50} /> */}
               <div>
-                <div className="text-[20px] font-bold">Sold</div>
-                <div className="text-[30px] font-bold">12,300 Unit</div>
+                <div className="text-[20px] font-bold">Countries</div>
+                <div className="text-[30px] font-bold">{information ? information.number_of_countries : "Loading..."}</div>
               </div>
             </div>
             <div className="flex items-center gap-5 border-r border-r-white pr-20">
               {/* <DollarSign size={50} /> */}
               <div>
-                <div className="text-[20px] font-bold">Net Sales</div>
-                <div className="text-[30px] font-bold">1,012 $</div>
+                <div className="text-[20px] font-bold">Total Net Sales</div>
+                <div className="text-[30px] font-bold">{information ? parseFloat(information.total_net_sales.toFixed(2)).toLocaleString() + " $" : "Loading..."}</div>
               </div>
             </div>
             <div className="flex items-center gap-5 border-r border-r-white pr-20">
               {/* <DollarSign size={50} /> */}
               <div>
-                <div className="text-[20px] font-bold">Gross Sales</div>
-                <div className="text-[30px] font-bold">1,012 $</div>
+                <div className="text-[20px] font-bold">Stores</div>
+                <div className="text-[30px] font-bold">{information ? information.total_stores : "Loading..."}</div>
               </div>
             </div>
             <div className="flex items-center gap-5 border-r border-r-white pr-20">
               {/* <Percent size={50} /> */}
               <div>
-                <div className="text-[20px] font-bold">Margin</div>
-                <div className="text-[30px] font-bold">20.3 %</div>
+                <div className="text-[20px] font-bold">Products</div>
+                <div className="text-[30px] font-bold">{information ? information.total_products : "Loading..."}</div>
               </div>
             </div>
             <div className="flex items-center gap-5">
               {/* <Warehouse size={50} /> */}
               <div>
-                <div className="text-[20px] font-bold">Stock Out</div>
-                <div className="text-[30px] font-bold">69 Products</div>
+                <div className="text-[20px] font-bold">Days</div>
+                <div className="text-[30px] font-bold">{information ? information.number_of_days : "Loading..."}</div>
               </div>
             </div>
           </div>
         </div>
         <Title text="Sales Overview" className={"absolute -mt-25 -translate-x-1/2 left-1/2"} />
-        <div className="w-full relative h-125 mt-10">
+        <div className="w-full relative h-125 mt-10 rounded-md overflow-hidden">
           <MainMap />
           <MapLegend />
         </div>

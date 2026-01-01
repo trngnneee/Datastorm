@@ -21,7 +21,10 @@ import {
   ResponsiveContainer,
   ReferenceArea,
   Legend,
+  Line,
+  LineChart,
 } from "recharts";
+import { toast } from "sonner";
 
 export const DemandForecast = () => {
   const [storeList, setStoreList] = useState([]);
@@ -45,11 +48,6 @@ export const DemandForecast = () => {
         .then((res) => res.json())
         .then((data) => {
           setBrandList(data.data);
-        });
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/unit_sold/daily?country=all&year=2023&month=12`)
-        .then((res) => res.json())
-        .then((data) => {
-          setOldUnitSoldData(data.data);
         });
     };
     fetchData();
@@ -85,16 +83,174 @@ export const DemandForecast = () => {
     }
   }, [selectedStore, selectedCategory, selectedBrand]);
 
-  const fixParameter = {
-    temperature: 30.5,
-    discount_pct: 0.0,
-    promo_flag: 0,
-  }
+  const [predictedData, setPredictedData] = useState([]);
+  const [predictedLeadTime, setPredictedLeadTime] = useState([]);
+  useEffect(() => {
+    const fetchPredictedData = async () => {
+      if (
+        !selectedStore ||
+        !selectedProduct ||
+        !selectedCategory ||
+        !selectedBrand
+      ) return;
+      const toastId = toast.loading("Fetching demand forecast...");
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/unit_sold/daily?country=all&year=2023&month=12&store=${encodeURIComponent(selectedStore)}&category=${encodeURIComponent(selectedCategory)}&brand=${encodeURIComponent(selectedBrand)}&sku_id=${encodeURIComponent(selectedProduct)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          setOldUnitSoldData(data.data);
+        });
+      try {
+        const predictions = [];
 
-  const mergedData = oldUnitSoldData.map(item => ({
-    date: item.date,
-    unit_sold: item.units_sold || 0,
-  }));
+        for (let i = 1; i <= 7; i++) {
+          const dateObj = new Date(2024, 0, i);
+
+          const payload = {
+            store_id: selectedStore,
+            sku_id: selectedProduct,
+            category: selectedCategory,
+            brand: selectedBrand,
+
+            date: dateObj.toISOString().slice(0, 10),
+            month: 1,
+            weekday: dateObj.getDay(),
+            is_weekend: [0, 6].includes(dateObj.getDay()) ? 1 : 0,
+            is_holiday: 0,
+
+            // Fix data
+            list_price: 100.0,
+            temperature: 30.5,
+            discount_pct: 0.0,
+            promo_flag: 0,
+          };
+
+          const res = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/predict_unit_sold`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(payload),
+            }
+          );
+
+          const data = await res.json();
+
+          predictions.push({
+            date: payload.date,
+            predicted_unit_sold: data.predicted_demand,
+          });
+        }
+        toast.success("Demand forecast fetched successfully!", { id: toastId });
+        setPredictedData(predictions);
+
+      } catch (err) {
+        toast.error("Failed to fetch demand forecast.", { id: toastId });
+        console.error("Prediction error:", err);
+      }
+    };
+    fetchPredictedData();
+  }, [selectedStore, selectedCategory, selectedBrand, selectedProduct]);
+
+  useEffect(() => {
+    const fetchPredictedLeadTimeData = async () => {
+      if (
+        !selectedStore ||
+        !selectedProduct ||
+        !selectedCategory ||
+        !selectedBrand
+      ) return;
+
+      const promise = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/detail?store_id=${encodeURIComponent(selectedStore)}&sku_id=${encodeURIComponent(selectedProduct)}&date=2024-01-01`)
+
+      const data = await promise.json();
+
+      try {
+        const predictions = [];
+
+        for (let i = 1; i <= 7; i++) {
+          const dateObj = new Date(2024, 0, i);
+          const startOfYear = new Date(dateObj.getFullYear(), 0, 0);
+          const diff = dateObj - startOfYear;
+          const oneDay = 1000 * 60 * 60 * 24;
+          const weekOfYear = Math.max(
+            1,
+            Math.floor((diff / oneDay + startOfYear.getDay() + 1) / 7)
+          );
+
+          const day = dateObj.getDate();
+          const month = dateObj.getMonth() + 1;
+          const year = dateObj.getFullYear();
+          const weekday = dateObj.getDay() === 0 ? 7 : dateObj.getDay();
+
+          const payload = {
+            date: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+            year,
+            month,
+            day,
+            weekofyear: weekOfYear,
+            weekday,
+            is_weekend: weekday === 6 || weekday === 7 ? 1 : 0,
+            is_holiday: 0,
+            temperature: 30.5,
+            rain_mm: 0.0,
+            store_id: selectedStore,
+            country: data.country,
+            city: data.city,
+            channel: data.channel,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            sku_id: selectedProduct,
+            sku_name: data.sku_name,
+            category: selectedCategory,
+            subcategory: data.subcategory,
+            brand: selectedBrand,
+            supplier_id: data.supplier_id,
+          };
+
+          const res = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/predict_lead_time`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(payload),
+            }
+          );
+
+          const data_lead_time = await res.json();
+
+          predictions.push({
+            date: payload.date,
+            predicted_unit_sold: data_lead_time.predicted_lead_time_days,
+          });
+        }
+        setPredictedLeadTime(predictions);
+      } catch (err) {
+        console.error("Prediction error:", err);
+      }
+    }
+    fetchPredictedLeadTimeData();
+  }, [predictedData])
+
+  const demandChartData = [
+    ...oldUnitSoldData.map(item => ({
+      date: item.date,
+      unit_sold: item.units_sold ?? 0,
+      predicted_unit_sold: null,
+    })),
+    ...predictedData.map(item => ({
+      date: item.date,
+      unit_sold: null,
+      predicted_unit_sold: item.predicted_unit_sold,
+    })),
+  ].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const leadTimeChartData = [...predictedLeadTime].sort(
+    (a, b) => new Date(a.date) - new Date(b.date)
+  );
 
   return (
     <>
@@ -224,32 +380,79 @@ export const DemandForecast = () => {
           </div>
         </div>
       </div>
-      <div className="bg-white p-5 rounded-md shadow-md border border-gray-300 w-full h-full mt-10">
+      <div className="bg-white p-5 shadow-md border border-gray-300 w-full h-full mt-10 rounded-md">
         <div className="text-center text-xl mb-3">
-          Unit Sold Forecase 12/2023 and 7 Days Prediction
+          Unit Sold of 12/2023 and 7 Days Prediction
         </div>
         <div className="text-center text-[12px] mb-3">
-          <span className="font-bold">Store:</span> {selectedStore || "All Stores"} - <span className="font-bold">Category:</span> {selectedCategory || "All Categories"} - <span className="font-bold">Brand:</span> {selectedBrand || "All Brands"} - <span className="font-bold">Product:</span> {selectedProduct || "All Products"}
+          <span className="font-bold">Store:</span> {selectedStore || "-"} - <span className="font-bold">Category:</span> {selectedCategory || "-"} - <span className="font-bold">Brand:</span> {selectedBrand || "-"} - <span className="font-bold">Product:</span> {selectedProduct || "-"}
         </div>
 
         <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={mergedData} barCategoryGap="2">
+          <BarChart data={demandChartData}>
             <CartesianGrid strokeDasharray="3 3" />
 
-            <XAxis dataKey="date" tick={{ fontSize: 12 }} minTickGap={20} />
-            <YAxis tick={{ fontSize: 12 }} />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 12 }}
+            />
+            <YAxis
+              yAxisId="left"
+              tick={{ fontSize: 12 }}
+            />
+
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              tick={{ fontSize: 10 }}
+              label={{
+                value: "Lead Time (days)",
+                angle: -90,
+                position: "insideRight",
+              }}
+            />
 
             <Tooltip />
+            <Legend verticalAlign="bottom" align="center" />
 
             <Bar
               dataKey="unit_sold"
+              name="Actual"
               fill="#f59e0b"
               radius={[4, 4, 0, 0]}
-              barSize={14}
             />
 
-            <Legend verticalAlign="bottom" align="center" />
+            <Bar
+              dataKey="predicted_unit_sold"
+              name="Predicted"
+              fill="#3b82f6"
+              radius={[4, 4, 0, 0]}
+            />
           </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="bg-white p-5 mt-10 shadow-md border rounded-md">
+        <div className="text-center text-lg mb-3">
+          Lead Time Prediction (Days)
+        </div>
+
+        <ResponsiveContainer width="100%" height={250}>
+          <LineChart data={leadTimeChartData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12 }} />
+            <Tooltip />
+            <Legend />
+
+            <Line
+              type="monotone"
+              dataKey="predicted_unit_sold"
+              name="Lead Time (days)"
+              stroke="#ef4444"
+              strokeWidth={2}
+              dot={{ r: 4 }}
+            />
+          </LineChart>
         </ResponsiveContainer>
       </div>
     </>

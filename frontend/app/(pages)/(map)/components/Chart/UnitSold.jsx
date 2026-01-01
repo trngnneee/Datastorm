@@ -76,7 +76,7 @@ export const UnitSold = () => {
   }));
 
   return (
-    <div className="bg-white p-5 rounded-md shadow-md border border-gray-300 w-full h-full">
+    <div className="bg-white p-5 shadow-md border border-gray-300 w-full h-full rounded-md">
       <div className="text-center text-xl mb-3">
         Unit Sold - {selectedMonth !== "all" ? selectedMonth : "All Months"} /
         {selectedYear !== "all" ? selectedYear : "All Years"} -{" "}
