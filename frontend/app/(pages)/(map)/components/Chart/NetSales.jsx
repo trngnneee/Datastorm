@@ -26,7 +26,6 @@ export const NetSales = () => {
   const setYearList = useFilterStore((state) => state.setYearList);
 
   const [netSalesData, setNetSalesData] = useState([]);
-  const [unitSoldData, setUnitSoldData] = useState([]);
   const startDate = useFilterStore((state) => state.startDate);
   const endDate = useFilterStore((state) => state.endDate);
   const setStartDate = useFilterStore((state) => state.setStartDate);
@@ -36,20 +35,15 @@ export const NetSales = () => {
       const toastId = toast.loading("Fetching data...");
       try {
         let yearQuery = selectedYear || "";
-        const [netRes, unitRes] = await Promise.all([
+        const [netRes] = await Promise.all([
           fetch(
             `${process.env.NEXT_PUBLIC_API_URL}/net_sales/daily?country=${selectedCountry}&year=${yearQuery}&month=${selectedMonth}`
-          ),
-          fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/unit_sold/daily?country=${selectedCountry}&year=${yearQuery}&month=${selectedMonth}`
-          ),
+          )
         ]);
 
         const netData = await netRes.json();
-        const unitData = await unitRes.json();
 
         setNetSalesData(netData.data);
-        setUnitSoldData(unitData.data);
         setStartDate(netData.meta.startDate);
         setEndDate(netData.meta.endDate);
         setYearList(netData.meta.yearList);
@@ -82,8 +76,7 @@ export const NetSales = () => {
       : [];
   const yearColors = ["#3b82f6", "#22c55e", "#f97316"];
   const mergedData = netSalesData.map((item, index) => ({
-    ...item,
-    unit_sold: unitSoldData[index]?.units_sold || 0,
+    ...item
   }));
 
   return (
@@ -94,11 +87,11 @@ export const NetSales = () => {
           {selectedYear !== "all" ? selectedYear : "All Years"} -{" "}
           {selectedCountry !== "all" ? selectedCountry : "All Countries"}
         </div>
-        <ResponsiveContainer width="100%" height={350}>
+        <ResponsiveContainer width="100%" height={200}>
           <LineChart data={mergedData}>
             <CartesianGrid strokeDasharray="3 3" />
 
-            <XAxis dataKey="date" tick={{ fontSize: 12 }} minTickGap={20} />
+            <XAxis dataKey="date" tick={{ fontSize: 12 }} minTickGap={50} />
 
             <YAxis tick={{ fontSize: 12 }} />
             <YAxis
@@ -125,14 +118,7 @@ export const NetSales = () => {
               dataKey="net_sales"
               strokeWidth={2}
               dot={false}
-            />
-            <Line
-              yAxisId="right"
-              type="monotone"
-              dataKey="unit_sold"
-              stroke="#f59e0b"
-              strokeWidth={2}
-              dot={false}
+              
             />
             <Legend verticalAlign="bottom" align="center" />
           </LineChart>

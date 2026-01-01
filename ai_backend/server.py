@@ -87,10 +87,8 @@ def predict_demand(request: ForecastRequest):
     try:
         # Convert request to dict
         context_data = request.dict()
-
         # Call the pipeline
         prediction = pipeline.get_forecast(context_data, horizon=request.horizon)
-
         return {
             "sku_id": request.sku_id,
             "horizon_days": request.horizon,
@@ -101,4 +99,4 @@ def predict_demand(request: ForecastRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

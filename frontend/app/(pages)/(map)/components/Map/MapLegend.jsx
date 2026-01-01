@@ -1,6 +1,6 @@
 export const MapLegend = () => {
   return (
-    <div className="absolute bottom-4 right-4 bg-white rounded-lg shadow-lg p-4 text-sm space-y-3">
+    <div className="absolute bottom-10 right-4 bg-white rounded-lg shadow-lg p-4 text-sm space-y-3">
       {/* Size legend */}
       <div>
         <div className="font-semibold mb-1">Net Sales</div>

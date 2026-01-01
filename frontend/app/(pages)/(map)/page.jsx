@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Users,
-  CirclePercent,
-  DollarSign,
-  Warehouse,
-  Percent,
-} from "lucide-react";
+import { UnitSold } from "./components/Chart/UnitSold";
 import { NetSales } from "./components/Chart/NetSales";
 import { NetSalesCategory } from "./components/Chart/NetSalesCategory";
 import { GroupBarChart } from "./components/Chart/GroupBarChart";
@@ -25,6 +19,8 @@ import { Label } from "@/components/ui/label";
 import { Calendar, Filter, Flag } from "lucide-react";
 import { useFilterStore } from "@/app/store/useFilterStore";
 import { useEffect } from "react";
+import { Title } from "./components/Title"
+import { DemandForecast } from "./components/DemandForecast/DemandForecast";
 
 export default function MapPage() {
   const selectedCountry = useFilterStore((state) => state.selectedCountry);
@@ -72,14 +68,14 @@ export default function MapPage() {
   const years =
     startDate && endDate
       ? Array.from(
-          {
-            length:
-              new Date(endDate).getFullYear() -
-              new Date(startDate).getFullYear() +
-              1,
-          },
-          (_, i) => new Date(startDate).getFullYear() + i
-        )
+        {
+          length:
+            new Date(endDate).getFullYear() -
+            new Date(startDate).getFullYear() +
+            1,
+        },
+        (_, i) => new Date(startDate).getFullYear() + i
+      )
       : yearList;
 
   return (
@@ -89,17 +85,17 @@ export default function MapPage() {
           <img src="/background.jpg" className="w-full h-full object-top" />
         </div>
         <div className="absolute top-10 w-full">
-          <div className="relative flex items-center text-white font-extrabold text-[50px] w-full">
-            <h1 className="z-10 pl-15">DOM Team</h1>
+          <div className="relative flex items-center text-white font-extrabold text-[55px] w-full">
+            <h1 className="z-10 pl-15 text-[30px]">DOM Team</h1>
 
-            <div className="absolute left-1/2 -translate-x-1/2">
+            <div className="absolute left-1/2 -translate-x-1/2 text-nowrap">
               Sale Management Dashboard
             </div>
           </div>
         </div>
       </div>
-      <div className="container mx-auto relative">
-        <div className="-mt-40 z-10 absolute flex justify-center text-white w-full">
+      <div className="container mx-auto relative mb-50">
+        <div className="-mt-50 z-10 absolute flex justify-center text-white w-full">
           <div className="bg-[#ffffff3f] py-3 px-10 rounded-md border border-white shadow-md flex items-center justify-center gap-10">
             <div className="flex items-center gap-5 border-r border-r-white pr-20">
               {/* <Warehouse size={50} /> */}
@@ -138,7 +134,12 @@ export default function MapPage() {
             </div>
           </div>
         </div>
-        <div className="bg-white p-5 rounded-md shadow-md border border-gray-300 w-full -mt-20">
+        <Title text="Sales Overview" className={"absolute -mt-25 -translate-x-1/2 left-1/2"} />
+        <div className="w-full relative h-125 mt-10">
+          <MainMap />
+          <MapLegend />
+        </div>
+        <div className="bg-white p-5 rounded-md shadow-md border border-gray-300 w-full mt-10">
           <div className="flex items-center gap-5 text-[20px] mb-5">
             <Filter />
             <span>Filter</span>
@@ -168,10 +169,10 @@ export default function MapPage() {
                   </SelectItem>
                   {Array.isArray(countries)
                     ? countries.map((country) => (
-                        <SelectItem key={country} value={country}>
-                          {country}
-                        </SelectItem>
-                      ))
+                      <SelectItem key={country} value={country}>
+                        {country}
+                      </SelectItem>
+                    ))
                     : null}
                 </SelectContent>
               </Select>
@@ -198,10 +199,10 @@ export default function MapPage() {
                 <SelectContent>
                   {Array.isArray(yearList)
                     ? yearList.map((year) => (
-                        <SelectItem key={year} value={year}>
-                          {year}
-                        </SelectItem>
-                      ))
+                      <SelectItem key={year} value={year}>
+                        {year}
+                      </SelectItem>
+                    ))
                     : null}
                 </SelectContent>
               </Select>
@@ -226,34 +227,38 @@ export default function MapPage() {
                 <SelectContent>
                   {Array.isArray(monthList)
                     ? monthList.map((month) => (
-                        <SelectItem key={month} value={month}>
-                          {month}
-                        </SelectItem>
-                      ))
+                      <SelectItem key={month} value={month}>
+                        {month}
+                      </SelectItem>
+                    ))
                     : null}
                 </SelectContent>
               </Select>
             </div>
           </div>
         </div>
-        <div className="w-full relative h-100 mt-10">
+        <div className="w-full relative mt-10">
           <div className="text-center text-xl">
             Net sales and Stock out Rate of{" "}
             {selectedCountry === "all" ? "All Countries" : selectedCountry} -{" "}
             {selectedMonth === "all" ? "All Months" : selectedMonth}/
             {selectedYear === "all" ? "All Years" : selectedYear}
           </div>
-          <MainMap />
-          <MapLegend />
         </div>
-        <div className="grid grid-cols-3 mt-10 gap-4 items-stretch">
-          <div className="col-span-2 h-full">
+        <div className="grid grid-cols-3 mt-10 gap-4">
+          {/* Row 1 */}
+          <div className="col-span-2">
             <NetSales />
           </div>
-
-          <div className="col-span-1 h-full">
+          <div className="col-span-1 row-span-2">
             <NetSalesCategory />
           </div>
+
+          {/* Row 2 */}
+          <div className="col-span-2">
+            <UnitSold />
+          </div>
+          <div className="col-span-1" />
         </div>
 
         <div className="mt-10 gap-4">
@@ -269,6 +274,9 @@ export default function MapPage() {
             <PromoBarChart />
           </div>
         </div>
+
+
+        <DemandForecast />
       </div>
     </>
   );

@@ -1,6 +1,6 @@
-export const Title = ({ text }) => {
+export const Title = ({ text, className }) => {
   return (
-    <div className="h-16 text-[28px] font-bold flex items-center justify-center">
+    <div className={`h-16 text-[40px] font-extrabold flex items-center justify-center z-100 ${className}`}>
       {text}
     </div>
   )

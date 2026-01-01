@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Query, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
+from sqlalchemy import func, case, literal
 from .model.sales_fact import SalesFact
 from .utils.db import get_db
 from fastapi.middleware.cors import CORSMiddleware
@@ -253,41 +253,30 @@ def get_units_sold_discount_scatter(
 
 @app.get("/net_sales/location")
 def get_net_sales_by_location(
-    country: str = Query("all"),
     db: Session = Depends(get_db),
-    year: str = Query("all"),
-    month: str = Query("all"),
 ):
     query = db.query(
         SalesFact.store_id,
         SalesFact.latitude,
         SalesFact.longitude,
+
         func.sum(SalesFact.net_sales).label("net_sales"),
-        func.sum(SalesFact.units_sold).label("units_sold"),
-        func.sum(SalesFact.stock_on_hand).label("stock_on_hand"),
-        (
-            func.sum(SalesFact.stock_on_hand) /
-            func.nullif(
-                func.sum(SalesFact.stock_on_hand) + func.sum(SalesFact.units_sold),
-                0
+
+        func.sum(
+            case(
+                (SalesFact.stock_out_flag.is_(True), literal(1)),
+                else_=literal(0)
             )
-        ).label("stock_out_rate")
-    )
+        ).label("stock_out_count"),
 
-    if country != "all":
-        query = query.filter(SalesFact.country == country)
-
-    if year != "all":
-        query = query.filter(func.extract("year", SalesFact.date) == int(year))
-
-    if month != "all":
-        query = query.filter(func.extract("month", SalesFact.date) == int(month))
-
-    rows = query.group_by(
+        func.count().label("total_count"),
+    ).group_by(
         SalesFact.store_id,
         SalesFact.latitude,
         SalesFact.longitude
-    ).all()
+    )
+
+    rows = query.all()
 
     return {
         "type": "FeatureCollection",
@@ -300,8 +289,12 @@ def get_net_sales_by_location(
                 },
                 "properties": {
                     "store_id": r.store_id,
-                    "net_sales": float(r.net_sales),
-                    "stock_out_rate": float(r.stock_out_rate or 0),
+                    "net_sales": float(r.net_sales or 0),
+                    "stock_out_count": int(r.stock_out_count or 0),
+                    "stock_out_rate": float(
+                        r.stock_out_count / r.total_count
+                        if r.total_count else 0
+                    ),
                 },
             }
             for r in rows
@@ -319,7 +312,6 @@ async def predict(
         sku_id = request['sku_id']
         date_str = request['date']  # 'YYYY-MM-DD'
         date = datetime.strptime(date_str, '%Y-%m-%d').date()
-
         # Calculate lags
         lag_dates = {
             'lag_1': date - timedelta(days=1),
@@ -327,7 +319,6 @@ async def predict(
             'lag_14': date - timedelta(days=14),
             'lag_28': date - timedelta(days=28),
         }
-
         lags = {}
         for lag_name, lag_date in lag_dates.items():
             row = db.query(SalesFact.units_sold).filter(
@@ -336,7 +327,6 @@ async def predict(
                 SalesFact.date == lag_date
             ).first()
             lags[lag_name] = float(row.units_sold) if row else 0.0
-
         # Rolling mean 7: average from date-6 to date
         rolling_7_start = date - timedelta(days=6)
         rolling_7_rows = db.query(SalesFact.units_sold).filter(
@@ -346,7 +336,6 @@ async def predict(
             SalesFact.date <= date
         ).all()
         rolling_mean_7 = sum(r.units_sold for r in rolling_7_rows) / len(rolling_7_rows) if rolling_7_rows else 0.0
-
         # Rolling mean 30: from date-29 to date
         rolling_30_start = date - timedelta(days=29)
         rolling_30_rows = db.query(SalesFact.units_sold).filter(
@@ -356,7 +345,6 @@ async def predict(
             SalesFact.date <= date
         ).all()
         rolling_mean_30 = sum(r.units_sold for r in rolling_30_rows) / len(rolling_30_rows) if rolling_30_rows else 0.0
-
         # Build the body
         body = {
             "horizon": request.get('horizon', 7),
@@ -376,10 +364,10 @@ async def predict(
             "rolling_mean_7": rolling_mean_7,
             "rolling_mean_30": rolling_mean_30
         }
-
+        print("Stage 6")
         # Send to AI server
         async with httpx.AsyncClient() as client:
-            response = await client.post("http://localhost:8000/predict", json=body)
+            response = await client.post("http://localhost:8001/predict", json=body)
             response.raise_for_status()
             return response.json()
 
@@ -389,3 +377,74 @@ async def predict(
         raise HTTPException(status_code=400, detail=f"Invalid date format: {e}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/store/list")
+def get_store_list(
+    db: Session = Depends(get_db),
+):
+    query = db.query(
+        SalesFact.store_id,
+    ).distinct()
+
+    rows = query.order_by(SalesFact.store_id).all()
+
+    return {
+        "data": [r.store_id for r in rows]
+    }
+
+@app.get("/category/list")
+def get_store_category_list(
+    db: Session = Depends(get_db),
+):
+    query = db.query(
+        SalesFact.category,
+    ).distinct()
+
+    rows = query.order_by(SalesFact.category).all()
+
+    return {
+        "data": [r.category for r in rows]
+    }
+
+@app.get("/brand/list")
+def get_brand_list(
+    db: Session = Depends(get_db),
+):
+    query = db.query(
+        SalesFact.brand,
+    ).distinct()
+
+    rows = query.order_by(SalesFact.brand).all()
+
+    return {
+        "data": [r.brand for r in rows]
+    }
+
+@app.get("/product/list")
+def get_product_list(
+    db: Session = Depends(get_db),
+    store: str = Query(..., description="Store ID to filter by"),
+    category: str = Query(..., description="Category to filter by"),
+    brand: str = Query(..., description="Brand to filter by"),
+):
+    query = db.query(
+        SalesFact.sku_id,
+        SalesFact.sku_name,
+        SalesFact.list_price
+    ).distinct()
+
+    if store:
+        query = query.filter(SalesFact.store_id == store)
+    if category:
+        query = query.filter(SalesFact.category == category)
+    if brand:
+        query = query.filter(SalesFact.brand == brand)
+
+    rows = query.order_by(SalesFact.sku_id).all()
+
+    return {
+        "data": [
+            {"sku_id": r.sku_id, "sku_name": r.sku_name, "list_price": float(r.list_price)}
+            for r in rows
+        ]
+    }
