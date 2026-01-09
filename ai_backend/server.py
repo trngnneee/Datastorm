@@ -140,12 +140,13 @@ def predict_demand(request: ForecastRequest):
 
     try:
         context_data = request.dict()
-        prediction = pipeline.get_forecast(context_data, horizon=request.horizon)
+        result = pipeline.get_forecast(context_data, horizon=request.horizon)
 
         return {
             "sku_id": request.sku_id,
             "horizon_days": request.horizon,
-            "predicted_demand": round(prediction, 2),
+            "predicted_demand": round(result['prediction'], 2),
+            "shap_explanation": result['shap_explanation'],
             "status": "success"
         }
     except Exception as e:
@@ -156,12 +157,13 @@ def predict_lead_time(request: LeadTimeRequest):
     """Predicts supplier lead time."""
     try:
         context_data = request.dict()
-        prediction = pipeline.get_lead_time_forecast(context_data)
+        result = pipeline.get_lead_time_forecast(context_data)
 
         return {
             "sku_id": request.sku_id,
             "supplier_id": request.supplier_id,
-            "predicted_lead_time_days": round(prediction, 2),
+            "predicted_lead_time_days": round(result['prediction'], 2),
+            "shap_explanation": result['shap_explanation'],
             "status": "success"
         }
     except Exception as e:
