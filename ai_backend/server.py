@@ -2,23 +2,34 @@ import pandas as pd
 import uvicorn
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 import os
+import logging
 from core import pipeline
 
+# --- Logging Setup ---
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger("API_Server")
+
 app = FastAPI(title="Two-Stage Demand Forecasting API")
+
+# --- Constants ---
+# Default path based on your environment
+PROCESSED_DATA_PATH = '/home/nguyen-quang-huy/Dom Technology/datastorm/data/FMCG/processed.csv'
 
 # --- Pydantic Schemas ---
 
 class TrainRequest(BaseModel):
-    # Just a placeholder if we want to send data via JSON,
-    # but practically we load CSV from disk for training
-    path: str = "data/full.csv"
+    path: str = PROCESSED_DATA_PATH
 
 class ForecastRequest(BaseModel):
     horizon: int # 1, 7, or 14
 
-    # Future Context (Info known for the target date)
+    # Future Context (Date & Environment)
     month: int
     weekday: int
     is_weekend: int
@@ -34,17 +45,19 @@ class ForecastRequest(BaseModel):
     category: str
     brand: str
 
-    # Recent History Metrics (Client must calculate these or we fetch from DB)
-    # These represent the state at time T (Today)
-    lag_1: float  # Sales yesterday
-    lag_7: float  # Sales 7 days ago
-    lag_14: float # Sales 14 days ago
-    lag_28: float # Sales 28 days ago
-    rolling_mean_7: float  # Average sales last 7 days
-    rolling_mean_30: float # Average sales last 30 days
+    # Stock Feature (Must be sent from client/ERP)
+    stock_opening: float
+
+    # Sales History (Client calculates these)
+    lag_1: float
+    lag_7: float
+    lag_14: float
+    lag_28: float
+    rolling_mean_7: float
+    rolling_mean_30: float
 
 class LeadTimeRequest(BaseModel):
-    date: str  # 'YYYY-MM-DD'
+    date: str
     year: int
     month: int
     day: int
@@ -71,48 +84,62 @@ class LeadTimeRequest(BaseModel):
 
 @app.on_event("startup")
 def startup_event():
-    """Tries to load data and train on startup"""
-    file_path = os.path.join("..", "data", "r2", "raw.csv")
+    """Tries to load PRE-PROCESSED data and train on startup."""
+    file_path = PROCESSED_DATA_PATH
     if os.path.exists(file_path):
         try:
+            logger.info(f"Startup: Loading data from {file_path}")
             df = pd.read_csv(file_path)
-            # Ensure date column handling
             if 'date' in df.columns:
                 df['date'] = pd.to_datetime(df['date'])
-            pipeline.run_training_pipeline(df)
+
+            # Execute pipeline and get metrics
+            metrics = pipeline.run_training_pipeline(df)
+
+            logger.info("--- SERVER STARTUP TRAINING COMPLETE ---")
+            logger.info(f"Evaluation Metrics:\n{metrics}")
+
         except Exception as e:
-            print(f"Startup training failed: {e}")
+            logger.error(f"Startup training failed: {e}")
     else:
-        print("Data file not found. Waiting for manual training trigger.")
+        logger.warning(f"Data file not found at {file_path}. Waiting for manual training.")
 
 @app.post("/train")
-async def trigger_training(background_tasks: BackgroundTasks):
-    """Triggers retraining in the background."""
-    file_path = os.path.join("data", "full.csv")
+def trigger_training(request: TrainRequest):
+    """
+    Triggers retraining. 
+    NOTE: This is blocking to return metrics. For non-blocking, use BackgroundTasks.
+    """
+    file_path = request.path
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Data file not found")
+        raise HTTPException(status_code=404, detail=f"Data file not found at {file_path}")
 
-    df = pd.read_csv(file_path)
-    if 'date' in df.columns:
-        df['date'] = pd.to_datetime(df['date'])
+    logger.info(f"Manual training triggered with data: {file_path}")
+    try:
+        df = pd.read_csv(file_path)
+        if 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date'])
 
-    # Run in background to not block response
-    background_tasks.add_task(pipeline.run_training_pipeline, df)
-    return {"status": "accepted", "message": "Training started in background."}
+        # Run pipeline
+        metrics = pipeline.run_training_pipeline(df)
+        
+        return {
+            "status": "success",
+            "message": "Training completed successfully.",
+            "evaluation_metrics": metrics
+        }
+    except Exception as e:
+        logger.error(f"Training failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/predict_unit_sold")
 def predict_demand(request: ForecastRequest):
-    """
-    Predicts demand for a specific horizon (1, 7, or 14 days).
-    """
+    """Predicts demand for a specific horizon."""
     if request.horizon not in [1, 7, 14]:
         raise HTTPException(status_code=400, detail="Horizon must be 1, 7, or 14.")
 
     try:
-        # Convert request to dict
         context_data = request.dict()
-
-        # Call the pipeline
         prediction = pipeline.get_forecast(context_data, horizon=request.horizon)
 
         return {
@@ -126,14 +153,9 @@ def predict_demand(request: ForecastRequest):
 
 @app.post("/predict_lead_time")
 def predict_lead_time(request: LeadTimeRequest):
-    """
-    Predicts lead time days for a specific SKU and supplier.
-    """
+    """Predicts supplier lead time."""
     try:
-        # Convert request to dict
         context_data = request.dict()
-
-        # Call the pipeline (assuming pipeline has a method for lead time)
         prediction = pipeline.get_lead_time_forecast(context_data)
 
         return {
@@ -147,4 +169,3 @@ def predict_lead_time(request: LeadTimeRequest):
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8001)
-    # uvicorn server:app --reload
