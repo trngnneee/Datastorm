@@ -104,7 +104,7 @@ def startup_event():
     else:
         logger.warning(f"Data file not found at {file_path}. Waiting for manual training.")
 
-@app.post("/train")
+@app.post("/ai/train")
 def trigger_training(request: TrainRequest):
     """
     Triggers retraining. 
@@ -132,7 +132,7 @@ def trigger_training(request: TrainRequest):
         logger.error(f"Training failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/predict_unit_sold")
+@app.post("/ai/predict_unit_sold")
 def predict_demand(request: ForecastRequest):
     """Predicts demand for a specific horizon."""
     if request.horizon not in [1, 7, 14]:
@@ -152,7 +152,7 @@ def predict_demand(request: ForecastRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/predict_lead_time")
+@app.post("/ai/predict_lead_time")
 def predict_lead_time(request: LeadTimeRequest):
     """Predicts supplier lead time."""
     try:
