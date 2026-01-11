@@ -110,7 +110,7 @@ export default function MapPage() {
         </div>
       </div>
       <div className="container mx-auto relative">
-        {/* <div className="-mt-65 z-10 absolute flex justify-center text-white w-full">
+        <div className="-mt-65 z-10 absolute flex justify-center text-white w-full">
           <div className="bg-[#ffffff3f] py-3 px-10 rounded-md border border-white shadow-md flex items-center justify-center gap-10">
             <div className="flex items-center gap-5 border-r border-r-white pr-20">
               <div>
@@ -133,7 +133,6 @@ export default function MapPage() {
               </div>
             </div>
             <div className="flex items-center gap-5 border-r border-r-white pr-20">
-    
               <div>
                 <div className="text-[20px] font-bold">Stores</div>
                 <div className="text-[30px] font-bold">
@@ -158,8 +157,8 @@ export default function MapPage() {
               </div>
             </div>
           </div>
-        </div> */}
-        {/* <div className="mt-10" id="stock-out-rate-to-location">
+        </div>
+        <div className="mt-10" id="stock-out-rate-to-location">
           <SubTitle text="Stock out Rate to Location" />
           <div className="w-full relative h-125 rounded-md overflow-hidden">
             <MainMap />
@@ -300,7 +299,7 @@ export default function MapPage() {
               <PromoBarChart />
             </div>
           </div>
-        </div> */}
+        </div>
         <div className="mt-10" id="top-selling-sku-store">
           <SubTitle text="Top Selling SKU-Store" />
 
