@@ -8,9 +8,9 @@ export default function MapLayout({ children }) {
       <Header />
       <div className="pb-20 mt-20 relative">
         <Sider />
-        <main className="ml-64 p-10 scroll-smooth">{children}</main>
+        <main className="ml-64 px-10 scroll-smooth">{children}</main>
         <Chatbot />
       </div>
     </>
-  )
+  );
 }

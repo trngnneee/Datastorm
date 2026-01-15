@@ -75,7 +75,21 @@ export const Sider = () => {
                   onClick={() => scrollTo("top-sku-store", 100)}
                   className="text-left hover:text-white transition"
                 >
-                 Top SKU-Store
+                  Top SKU-Store
+                </button>
+
+                <button
+                  onClick={() => scrollTo("stock-alerts", 100)}
+                  className="text-left hover:text-white transition"
+                >
+                  Stock Alerts
+                </button>
+
+                <button
+                  onClick={() => scrollTo("financial-analytics", 100)}
+                  className="text-left hover:text-white transition"
+                >
+                  Financial Analytics
                 </button>
               </motion.div>
             )}

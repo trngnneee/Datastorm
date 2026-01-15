@@ -2,6 +2,28 @@
 
 A comprehensive platform for FMCG (Fast-Moving Consumer Goods) sales data analysis, visualization, and AI-powered forecasting. Built with modern web technologies and machine learning to provide actionable insights for retail decision-making.
 
+## 🆕 Recent Enhancements (Jan 2026)
+
+### ✅ Priority Features Implemented
+
+1. **⚠️ Stock Alert System**
+   - Real-time low-stock detection with intelligent thresholds
+   - 3-level urgency system (Critical/Warning/Info)
+   - Automatic recommended order quantity calculation
+   - Days until stockout estimation
+
+2. **💰 Financial Analytics Dashboard**
+   - Revenue trending and performance metrics
+   - Profit margin analysis by category
+   - Key Performance Indicators (KPIs)
+   - Interactive charts and detailed breakdowns
+
+3. **📊 Enhanced Reporting**
+   - Category-level profit analysis
+   - Stockout rate tracking
+   - Promotional impact measurement
+   - Sales and unit trends
+
 ## Business Usage
 
 DataStorm addresses critical business challenges in FMCG retail:

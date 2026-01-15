@@ -49,7 +49,7 @@ export const NetSalesCategory = () => {
 
   return (
     <>
-      <div className="bg-white p-5 rounded-md// shadow-md border border-gray-300 w-full h-full flex flex-col justify-center rounded-md items-center">
+      <div className="bg-white p-5 rounded-md// shadow-md// border border-gray-300 w-full h-full flex flex-col justify-center rounded-md items-center">
         <div className="text-center text-xl mb-10">
           Net Sales Category -{" "}
           {selectedMonth !== "all" ? selectedMonth : "All Months"}/

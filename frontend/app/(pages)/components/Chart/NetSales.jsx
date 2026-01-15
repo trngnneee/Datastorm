@@ -38,7 +38,7 @@ export const NetSales = () => {
         const [netRes] = await Promise.all([
           fetch(
             `${process.env.NEXT_PUBLIC_API_URL}/net_sales/daily?country=${selectedCountry}&year=${yearQuery}&month=${selectedMonth}`
-          )
+          ),
         ]);
 
         const netData = await netRes.json();
@@ -76,12 +76,12 @@ export const NetSales = () => {
       : [];
   const yearColors = ["#3b82f6", "#22c55e", "#f97316"];
   const mergedData = netSalesData.map((item, index) => ({
-    ...item
+    ...item,
   }));
 
   return (
     <>
-      <div className="bg-white p-5 rounded-md// shadow-md border border-gray-300 w-full h-full rounded-md">
+      <div className="bg-white p-5 rounded-md// shadow-md// border border-gray-300 w-full h-full rounded-md">
         <div className="text-center text-xl">
           Net Sales - {selectedMonth !== "all" ? selectedMonth : "All Months"}/
           {selectedYear !== "all" ? selectedYear : "All Years"} -{" "}
@@ -118,7 +118,6 @@ export const NetSales = () => {
               dataKey="net_sales"
               strokeWidth={2}
               dot={false}
-              
             />
             <Legend verticalAlign="bottom" align="center" />
           </LineChart>
