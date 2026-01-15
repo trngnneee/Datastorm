@@ -14,6 +14,7 @@ import {
   Legend,
 } from "recharts";
 import { toast } from "sonner";
+import { useGlobalLoading } from "../../../context/loadingContext";
 
 export const NetSales = () => {
   const selectedCountry = useFilterStore((state) => state.selectedCountry);
@@ -30,9 +31,12 @@ export const NetSales = () => {
   const endDate = useFilterStore((state) => state.endDate);
   const setStartDate = useFilterStore((state) => state.setStartDate);
   const setEndDate = useFilterStore((state) => state.setEndDate);
+
+  const { startLoading, stopLoading, isLoading } = useGlobalLoading();
+
   useEffect(() => {
     const fetchData = async () => {
-      const toastId = toast.loading("Fetching data...");
+      startLoading();
       try {
         let yearQuery = selectedYear || "";
         const [netRes] = await Promise.all([
@@ -51,11 +55,10 @@ export const NetSales = () => {
         if (!selectedYear && netData.meta.yearList?.length > 0) {
           setSelectedYear(netData.meta.yearList[0]);
         }
-
-        toast.success("Data fetched successfully!", { id: toastId });
       } catch (err) {
         console.error(err);
-        toast.error("Failed to fetch data!", { id: toastId });
+      } finally {
+        stopLoading();
       }
     };
 

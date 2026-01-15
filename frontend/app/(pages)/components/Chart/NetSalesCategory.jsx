@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
+import { useGlobalLoading } from "../../../context/loadingContext";
 
 export const NetSalesCategory = () => {
   const [data, setData] = useState([]);
@@ -19,14 +20,18 @@ export const NetSalesCategory = () => {
   const selectedYear = useFilterStore((state) => state.selectedYear);
   const selectedMonth = useFilterStore((state) => state.selectedMonth);
 
+  const { startLoading, stopLoading, isLoading } = useGlobalLoading();
+
   useEffect(() => {
     const fetchData = async () => {
+      startLoading();
       await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/net_sales/category?country=${selectedCountry}&year=${selectedYear}&month=${selectedMonth}`
       )
         .then((response) => response.json())
         .then((data) => {
           setData(data.data);
+          stopLoading();
         });
     };
     fetchData();

@@ -11,6 +11,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { useGlobalLoading } from "../../../context/loadingContext";
 
 export const GroupBarChart = () => {
   const [data, setData] = useState({});
@@ -18,8 +19,11 @@ export const GroupBarChart = () => {
   const selectedYear = useFilterStore((state) => state.selectedYear);
   const selectedMonth = useFilterStore((state) => state.selectedMonth);
 
+  const { startLoading, stopLoading, isLoading } = useGlobalLoading();
+
   useEffect(() => {
     const fetchData = async () => {
+      startLoading();
       await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/unit_sold/holiday_weekday?country=${selectedCountry}&year=${selectedYear}&month=${selectedMonth}`
       )
@@ -27,6 +31,7 @@ export const GroupBarChart = () => {
         .then((data) => {
           setData(data);
         });
+      stopLoading();  
     };
     fetchData();
   }, [selectedCountry, selectedYear, selectedMonth]);

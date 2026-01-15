@@ -13,6 +13,7 @@ import {
   ReferenceArea,
   Legend,
 } from "recharts";
+import { useGlobalLoading } from "../../../context/loadingContext";
 
 export const UnitSold = () => {
   const selectedCountry = useFilterStore((state) => state.selectedCountry);
@@ -28,8 +29,11 @@ export const UnitSold = () => {
   const setStartDate = useFilterStore((state) => state.setStartDate);
   const setEndDate = useFilterStore((state) => state.setEndDate);
 
+  const { startLoading, stopLoading, isLoading } = useGlobalLoading();
+
   useEffect(() => {
     const fetchData = async () => {
+      startLoading();
       try {
         let yearQuery = selectedYear || "";
 
@@ -49,6 +53,9 @@ export const UnitSold = () => {
         }
       } catch (err) {
         console.error(err);
+      }
+      finally {
+        stopLoading();
       }
     };
 

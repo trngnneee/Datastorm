@@ -166,51 +166,52 @@ export const DemandForecast = () => {
   const [isSuggestionLoading, setIsSuggestionLoading] = useState(false);
   useEffect(() => {
     if (predictedData.length === 0) return;
-    setIsSuggestionLoading(true);
-    const fetchSaleDemandSuggestion = async () => {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/suggestion/sales_demand`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          forecast_data: predictedData,
-          sku_id: selectedProduct,
-          store_id: selectedStore,
-          category: selectedCategory,
-          brand: selectedBrand,
-        })
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          setSaleDemandSuggestion(data.message);
-        })
-    }
-    const fetchLeadTimeSuggestion = async () => {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/suggestion/lead_time`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          forecast_data: predictedLeadTime,
-          sku_id: selectedProduct,
-          store_id: selectedStore,
-          category: selectedCategory,
-          brand: selectedBrand,
-        })
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          setLeadTimeSuggestion(data.message);
-        })
+
+    const fetchSuggestions = async () => {
+      setIsSuggestionLoading(true);
+      const toastID = toast.loading("Generating suggestions...");
+
+      try {
+        const [saleRes, leadRes] = await Promise.all([
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/suggestion/sales_demand`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              forecast_data: predictedData,
+              sku_id: selectedProduct,
+              store_id: selectedStore,
+              category: selectedCategory,
+              brand: selectedBrand,
+            }),
+          }).then((res) => res.json()),
+
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/suggestion/lead_time`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              forecast_data: predictedLeadTime,
+              sku_id: selectedProduct,
+              store_id: selectedStore,
+              category: selectedCategory,
+              brand: selectedBrand,
+            }),
+          }).then((res) => res.json()),
+        ]);
+
+        setSaleDemandSuggestion(saleRes.message);
+        setLeadTimeSuggestion(leadRes.message);
+
+        toast.success("Suggestions generated!", { id: toastID });
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to generate suggestions", { id: toastID });
+      } finally {
+        setIsSuggestionLoading(false);
       }
-    setIsSuggestionLoading(false);
-    fetchSaleDemandSuggestion();
-    fetchLeadTimeSuggestion();
-    const toastID = toast.loading("Generating suggestions...");
-    toast.success("Suggestions generated!", { id: toastID });
-  }, [predictedData])
+    };
+
+    fetchSuggestions();
+  }, [predictedData]);
 
   const demandChartData = [
     ...oldUnitSoldData.map(item => ({

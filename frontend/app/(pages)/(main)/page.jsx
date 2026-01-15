@@ -31,6 +31,8 @@ import { useFilterStore } from "@/app/store/useFilterStore";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { SubTitle } from "../components/SubTitle";
+import { useGlobalLoading } from "../../context/loadingContext";
+import { Button } from "@/components/ui/button";
 
 const monthList = [
   "1",
@@ -68,6 +70,10 @@ export default function MapPage() {
     (state) => state.setSelectedCountry
   );
 
+  const [selectedYearTmp, setSelectedYearTmp] = useState("all");
+  const [selectedMonthTmp, setSelectedMonthTmp] = useState("all");
+  const [selectedCountryTmp, setSelectedCountryTmp] = useState("all");
+
   const selectedYear = useFilterStore((state) => state.selectedYear);
   const setSelectedYear = useFilterStore((state) => state.setSelectedYear);
 
@@ -83,32 +89,52 @@ export default function MapPage() {
 
   const [topProducts, setTopProducts] = useState([]);
 
+  const { startLoading, stopLoading, isLoading } = useGlobalLoading();
+
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        const [countriesRes, topProductsRes] = await Promise.all([
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/country`).then((res) =>
-            res.json()
-          ),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/sku/top?limit=10`).then(
-            (res) => res.json()
-          ),
-        ]);
-
-        if (countriesRes?.countries) {
-          setCountries(countriesRes.countries);
-        }
-
-        if (Array.isArray(topProductsRes?.data)) {
-          setTopProducts(topProductsRes.data);
-        }
-      } catch (error) {
-        console.error("Failed to load dashboard data", error);
-      }
+      startLoading();
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/country`)
+        .then((res) => res.json())
+        .then((data) => {
+          setCountries(data.countries);
+        });
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/information`)
+        .then((res) => res.json())
+        .then((data) => {
+          setInformation(data);
+        });
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/sku/top?limit=10`)
+        .then((res) => res.json())
+        .then((data) => {
+          setTopProducts(data.data);
+        });
+      stopLoading();
     };
 
     fetchData();
-  }, [setCountries]);
+  }, []);
+
+  const handleFilter = () => {
+    setSelectedCountry(selectedCountryTmp);
+    setSelectedYear(selectedYearTmp);
+    setSelectedMonth(selectedMonthTmp);
+  }
+
+  const monthList = [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+  ];
 
   const years = useMemo(() => {
     if (startDate && endDate) {
@@ -116,7 +142,18 @@ export default function MapPage() {
       const end = new Date(endDate).getFullYear();
       const totalYears = end - start + 1;
 
-      if (Number.isNaN(totalYears) || totalYears < 1) return yearList;
+  const years =
+    startDate && endDate
+      ? Array.from(
+        {
+          length:
+            new Date(endDate).getFullYear() -
+            new Date(startDate).getFullYear() +
+            1,
+        },
+        (_, i) => new Date(startDate).getFullYear() + i
+      )
+      : yearList;
 
       return Array.from({ length: totalYears }, (_, i) => String(start + i));
     }
@@ -358,6 +395,16 @@ export default function MapPage() {
                   {" "}
                   {selectedYear === "all" ? "All Years" : selectedYear}
                 </span>
+              </div>
+              <div className="w-full">
+                <Button
+                  className="mt-7.5 w-full bg-[var(--main-color)] hover:bg-[var(--main-hover)] text-white"
+                  onClick={handleFilter}
+                  disabled={isLoading}
+                >
+                  <Filter size={14} />
+                  Apply Filters
+                </Button>
               </div>
             </div>
           </section>
