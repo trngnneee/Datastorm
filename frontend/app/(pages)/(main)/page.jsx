@@ -99,11 +99,6 @@ export default function MapPage() {
         .then((data) => {
           setCountries(data.countries);
         });
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/information`)
-        .then((res) => res.json())
-        .then((data) => {
-          setInformation(data);
-        });
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/sku/top?limit=10`)
         .then((res) => res.json())
         .then((data) => {
@@ -119,7 +114,7 @@ export default function MapPage() {
     setSelectedCountry(selectedCountryTmp);
     setSelectedYear(selectedYearTmp);
     setSelectedMonth(selectedMonthTmp);
-  }
+  };
 
   const monthList = [
     "1",
@@ -142,18 +137,18 @@ export default function MapPage() {
       const end = new Date(endDate).getFullYear();
       const totalYears = end - start + 1;
 
-  const years =
-    startDate && endDate
-      ? Array.from(
-        {
-          length:
-            new Date(endDate).getFullYear() -
-            new Date(startDate).getFullYear() +
-            1,
-        },
-        (_, i) => new Date(startDate).getFullYear() + i
-      )
-      : yearList;
+      const years =
+        startDate && endDate
+          ? Array.from(
+              {
+                length:
+                  new Date(endDate).getFullYear() -
+                  new Date(startDate).getFullYear() +
+                  1,
+              },
+              (_, i) => new Date(startDate).getFullYear() + i
+            )
+          : yearList;
 
       return Array.from({ length: totalYears }, (_, i) => String(start + i));
     }
