@@ -17,6 +17,7 @@ import {
 import { Filter } from "lucide-react";
 import { useFilterStore } from "@/app/store/useFilterStore";
 import { toast } from "sonner";
+import { useGlobalLoading } from "../../../context/loadingContext";
 
 const COLORS = [
   "#3b82f6",
@@ -35,18 +36,21 @@ export const FinancialAnalytics = () => {
   const setStartDate = useFilterStore((state) => state.setStartDate);
   const setEndDate = useFilterStore((state) => state.setEndDate);
 
+  const { startLoading, stopLoading, isLoading } = useGlobalLoading();
+  const [loading, setLoading] = useState(false);
+
   const [revenueData, setRevenueData] = useState([]);
   const [profitData, setProfitData] = useState([]);
   const [kpiData, setKpiData] = useState(null);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchAnalytics();
   }, [selectedCountry, selectedYear, startDate, endDate]);
 
   const fetchAnalytics = async () => {
-    setLoading(true);
     try {
+      startLoading();
+      setLoading(true);
       // Fetch revenue data
       const revenueRes = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/analytics/revenue?country=${selectedCountry}&year=${selectedYear}`
@@ -71,6 +75,7 @@ export const FinancialAnalytics = () => {
       toast.error("Failed to fetch financial analytics");
       console.error(error);
     } finally {
+      stopLoading();
       setLoading(false);
     }
   };

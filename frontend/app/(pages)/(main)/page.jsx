@@ -22,12 +22,18 @@ import { Calendar, Filter, Flag } from "lucide-react";
 import { useFilterStore } from "@/app/store/useFilterStore";
 import { useEffect, useState } from "react";
 import { SubTitle } from "../components/SubTitle";
+import { useGlobalLoading } from "../../context/loadingContext";
+import { Button } from "@/components/ui/button";
 
 export default function MapPage() {
   const selectedCountry = useFilterStore((state) => state.selectedCountry);
   const setSelectedCountry = useFilterStore(
     (state) => state.setSelectedCountry
   );
+
+  const [selectedYearTmp, setSelectedYearTmp] = useState("all");
+  const [selectedMonthTmp, setSelectedMonthTmp] = useState("all");
+  const [selectedCountryTmp, setSelectedCountryTmp] = useState("all");
 
   const selectedYear = useFilterStore((state) => state.selectedYear);
   const setSelectedYear = useFilterStore((state) => state.setSelectedYear);
@@ -44,8 +50,11 @@ export default function MapPage() {
   const [topProducts, setTopProducts] = useState([]);
   const [stockAlerts, setStockAlerts] = useState([]);
 
+  const { startLoading, stopLoading, isLoading } = useGlobalLoading();
+
   useEffect(() => {
     const fetchData = async () => {
+      startLoading();
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/country`)
         .then((res) => res.json())
         .then((data) => {
@@ -60,11 +69,17 @@ export default function MapPage() {
         .then((res) => res.json())
         .then((data) => {
           setTopProducts(data.data);
-          console.log(data.data);
         });
+      stopLoading();
     };
     fetchData();
   }, []);
+
+  const handleFilter = () => {
+    setSelectedCountry(selectedCountryTmp);
+    setSelectedYear(selectedYearTmp);
+    setSelectedMonth(selectedMonthTmp);
+  }
 
   const monthList = [
     "1",
@@ -87,14 +102,14 @@ export default function MapPage() {
   const years =
     startDate && endDate
       ? Array.from(
-          {
-            length:
-              new Date(endDate).getFullYear() -
-              new Date(startDate).getFullYear() +
-              1,
-          },
-          (_, i) => new Date(startDate).getFullYear() + i
-        )
+        {
+          length:
+            new Date(endDate).getFullYear() -
+            new Date(startDate).getFullYear() +
+            1,
+        },
+        (_, i) => new Date(startDate).getFullYear() + i
+      )
       : yearList;
 
   return (
@@ -128,7 +143,7 @@ export default function MapPage() {
               <Filter />
               <span>Filter</span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="w-full">
                 <Label
                   htmlFor="country-select"
@@ -138,10 +153,11 @@ export default function MapPage() {
                   Country
                 </Label>
                 <Select
-                  value={selectedCountry}
-                  onValueChange={setSelectedCountry}
+                  value={selectedCountryTmp}
+                  onValueChange={setSelectedCountryTmp}
                   className="mb-4"
                   id="country-select"
+                  disabled={!countries.length || isLoading}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select country" />
@@ -153,10 +169,10 @@ export default function MapPage() {
                     </SelectItem>
                     {Array.isArray(countries)
                       ? countries.map((country) => (
-                          <SelectItem key={country} value={country}>
-                            {country}
-                          </SelectItem>
-                        ))
+                        <SelectItem key={country} value={country}>
+                          {country}
+                        </SelectItem>
+                      ))
                       : null}
                   </SelectContent>
                 </Select>
@@ -170,9 +186,9 @@ export default function MapPage() {
                   Year
                 </Label>
                 <Select
-                  value={selectedYear}
-                  onValueChange={setSelectedYear}
-                  disabled={!years.length}
+                  value={selectedYearTmp}
+                  onValueChange={setSelectedYearTmp}
+                  disabled={!years.length || isLoading}
                   className="mb-4"
                   id="year-select"
                 >
@@ -183,10 +199,10 @@ export default function MapPage() {
                   <SelectContent>
                     {Array.isArray(yearList)
                       ? yearList.map((year) => (
-                          <SelectItem key={year} value={year}>
-                            {year}
-                          </SelectItem>
-                        ))
+                        <SelectItem key={year} value={year}>
+                          {year}
+                        </SelectItem>
+                      ))
                       : null}
                   </SelectContent>
                 </Select>
@@ -199,10 +215,11 @@ export default function MapPage() {
                   <Calendar size={14} /> Month
                 </Label>
                 <Select
-                  value={selectedMonth}
-                  onValueChange={setSelectedMonth}
+                  value={selectedMonthTmp}
+                  onValueChange={setSelectedMonthTmp}
                   className="mb-4"
                   id="month-select"
+                  disabled={!monthList.length || isLoading}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select month" />
@@ -211,13 +228,23 @@ export default function MapPage() {
                   <SelectContent>
                     {Array.isArray(monthList)
                       ? monthList.map((month) => (
-                          <SelectItem key={month} value={month}>
-                            {month}
-                          </SelectItem>
-                        ))
+                        <SelectItem key={month} value={month}>
+                          {month}
+                        </SelectItem>
+                      ))
                       : null}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="w-full">
+                <Button
+                  className="mt-7.5 w-full bg-[var(--main-color)] hover:bg-[var(--main-hover)] text-white"
+                  onClick={handleFilter}
+                  disabled={isLoading}
+                >
+                  <Filter size={14} />
+                  Apply Filters
+                </Button>
               </div>
             </div>
           </div>
@@ -302,11 +329,10 @@ export default function MapPage() {
                     <td className="px-4 py-2">
                       {product.stock_opening ? product.stock_opening : "null"}
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="py-2">
                       <span
-                        className={`px-4 py-1 ${
-                          index % 4 === 0 ? "bg-red-500" : "bg-green-500"
-                        } rounded-sm text-white`}
+                        className={`px-4 py-1 ${index % 4 === 0 ? "bg-red-500" : "bg-green-500"
+                          } rounded-sm text-white`}
                       >
                         {index % 4 === 0 ? "Stock Out " : "Stock Out"}
                       </span>

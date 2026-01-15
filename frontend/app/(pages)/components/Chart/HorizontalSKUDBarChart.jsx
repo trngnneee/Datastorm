@@ -12,6 +12,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { useGlobalLoading } from "../../../context/loadingContext";
 
 export const HorizontalSKUDBarChart = () => {
   const [data, setData] = useState([]);
@@ -19,8 +20,11 @@ export const HorizontalSKUDBarChart = () => {
   const selectedYear = useFilterStore((state) => state.selectedYear);
   const selectedMonth = useFilterStore((state) => state.selectedMonth);
 
+  const { startLoading, stopLoading, isLoading } = useGlobalLoading();
+
   useEffect(() => {
     const fetchData = async () => {
+      startLoading();
       await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/sku/top?country=${selectedCountry}&year=${selectedYear}&month=${selectedMonth}&limit=10`
       )
@@ -28,6 +32,7 @@ export const HorizontalSKUDBarChart = () => {
         .then((data) => {
           setData(data.data);
         });
+      stopLoading();
     };
     fetchData();
   }, [selectedCountry, selectedYear, selectedMonth]);

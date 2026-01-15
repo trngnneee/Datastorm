@@ -2,10 +2,10 @@ import React, { useEffect, useState } from "react";
 import { AlertTriangle, AlertCircle, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useGlobalLoading } from "../../../context/loadingContext";
 
 export const StockAlerts = () => {
   const [alerts, setAlerts] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [filterUrgency, setFilterUrgency] = useState("all");
   const [selectedCountry, setSelectedCountry] = useState("all");
 
@@ -13,8 +13,10 @@ export const StockAlerts = () => {
     fetchAlerts();
   }, [filterUrgency, selectedCountry]);
 
+  const { startLoading, stopLoading, isLoading } = useGlobalLoading();
+
   const fetchAlerts = async () => {
-    setLoading(true);
+    startLoading();
     try {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/stock_alerts?country=${selectedCountry}&urgency=${filterUrgency}`
@@ -25,7 +27,7 @@ export const StockAlerts = () => {
       toast.error("Failed to fetch stock alerts");
       console.error(error);
     } finally {
-      setLoading(false);
+      stopLoading();
     }
   };
 
@@ -67,7 +69,7 @@ export const StockAlerts = () => {
     <div className="w-full">
       <div className="mb-4 flex gap-4">
         <div>
-          <label className="text-sm font-medium">Urgency Filter</label>
+          <label className="text-sm font-medium mr-5">Urgency Filter</label>
           <select
             value={filterUrgency}
             onChange={(e) => setFilterUrgency(e.target.value)}
@@ -78,8 +80,8 @@ export const StockAlerts = () => {
             <option value="warning">Warning Only</option>
           </select>
         </div>
-        <Button onClick={fetchAlerts} disabled={loading} className="mt-6">
-          {loading ? "Loading..." : "Refresh"}
+        <Button onClick={fetchAlerts} disabled={isLoading} className="self-end bg-[var(--main-color)] hover:bg-[var(--main-hover)] text-white">
+          {isLoading ? "Loading..." : "Refresh"}
         </Button>
       </div>
 
@@ -89,7 +91,7 @@ export const StockAlerts = () => {
           <p>No stock alerts at this time</p>
         </div>
       ) : (
-        <div className="space-y-3 max-h-96 overflow-y-auto">
+        <div className="space-y-3 max-h-150 overflow-y-auto">
           {alerts.map((alert) => (
             <div
               key={`${alert.sku_id}-${alert.store_id}`}
