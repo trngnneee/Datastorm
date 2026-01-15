@@ -8,6 +8,8 @@ import { HorizontalSKUDBarChart } from "../components/Chart/HorizontalSKUDBarCha
 import { PromoBarChart } from "../components/Chart/PromoBarChart";
 import { MainMap } from "../components/Map/MainMap";
 import { MapLegend } from "../components/Map/MapLegend";
+import { StockAlerts } from "../components/StockAlerts/StockAlerts";
+import { FinancialAnalytics } from "../components/FinancialAnalytics/FinancialAnalytics";
 import {
   Select,
   SelectContent,
@@ -41,29 +43,25 @@ export default function MapPage() {
   const [information, setInformation] = useState(null);
   const [topProducts, setTopProducts] = useState([]);
   const [stockAlerts, setStockAlerts] = useState([]);
+
   useEffect(() => {
     const fetchData = async () => {
-      // await fetch(`${process.env.NEXT_PUBLIC_API_URL}/country`)
-      //   .then((res) => res.json())
-      //   .then((data) => {
-      //     setCountries(data.countries);
-      //   });
-      // await fetch(`${process.env.NEXT_PUBLIC_API_URL}/information`)
-      //   .then((res) => res.json())
-      //   .then((data) => {
-      //     setInformation(data);
-      //   });
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/country`)
+        .then((res) => res.json())
+        .then((data) => {
+          setCountries(data.countries);
+        });
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/information`)
+        .then((res) => res.json())
+        .then((data) => {
+          setInformation(data);
+        });
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/sku/top?limit=10`)
         .then((res) => res.json())
         .then((data) => {
           setTopProducts(data.data);
           console.log(data.data);
         });
-      // await fetch(`${process.env.NEXT_PUBLIC_API_URL}/product/stock_alerts`)
-      //   .then((res) => res.json())
-      //   .then((data) => {
-      //     setStockAlerts(data.data);
-      //   });
     };
     fetchData();
   }, []);
@@ -101,73 +99,23 @@ export default function MapPage() {
 
   return (
     <>
-      <div className="flex flex-col overflow-y-auto relative">
-        <div className="w-full h-[40vh] overflow-hidden">
-          <img
-            src="/background.jpg"
-            className="w-full h-full object-top rounded-md"
-          />
-        </div>
-      </div>
-      <div className="container mx-auto relative">
-        <div className="-mt-65 z-10 absolute flex justify-center text-white w-full">
-          <div className="bg-[#ffffff3f] py-3 px-10 rounded-md border border-white shadow-md flex items-center justify-center gap-10">
-            <div className="flex items-center gap-5 border-r border-r-white pr-20">
-              <div>
-                <div className="text-[20px] font-bold">Total Net Sales</div>
-                <div className="text-[30px] font-bold">
-                  {information
-                    ? parseFloat(
-                        information.total_net_sales.toFixed(2)
-                      ).toLocaleString() + " $"
-                    : "..."}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-5 border-r border-r-white pr-20">
-              <div>
-                <div className="text-[20px] font-bold">Countries</div>
-                <div className="text-[30px] font-bold">
-                  {information ? information.number_of_countries : "..."}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-5 border-r border-r-white pr-20">
-              <div>
-                <div className="text-[20px] font-bold">Stores</div>
-                <div className="text-[30px] font-bold">
-                  {information ? information.total_stores : "..."}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-5 border-r border-r-white pr-20">
-              <div>
-                <div className="text-[20px] font-bold">Products</div>
-                <div className="text-[30px] font-bold">
-                  {information ? information.total_products : "..."}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-5">
-              <div>
-                <div className="text-[20px] font-bold">Days</div>
-                <div className="text-[30px] font-bold">
-                  {information ? information.number_of_days : "..."}
-                </div>
-              </div>
-            </div>
+      <div className="container mx-auto//">
+        <div className="mt-10//" id="financial-analytics">
+          <SubTitle text="Financial Analytics & Performance" />
+          <div className="bg-white mt-3">
+            <FinancialAnalytics />
           </div>
         </div>
         <div className="mt-10" id="stock-out-rate-to-location">
           <SubTitle text="Stock out Rate to Location" />
-          <div className="w-full relative h-125 rounded-md overflow-hidden">
+          <div className="w-full relative h-125 rounded-md overflow-hidden mt-3">
             <MainMap />
             <MapLegend />
           </div>
         </div>
         <div className="mt-10" id="sales-analysis">
           <SubTitle text="Sales Analysis" />
-          <div className="w-full mb-5">
+          <div className="w-full mt-3">
             <div className="text-left text-xl">
               Net sales and Stock out Rate of{" "}
               {selectedCountry === "all" ? "All Countries" : selectedCountry} -{" "}
@@ -175,7 +123,7 @@ export default function MapPage() {
               {selectedYear === "all" ? "All Years" : selectedYear}
             </div>
           </div>
-          <div className="bg-white p-5 rounded-md shadow-md border border-gray-300 w-full">
+          <div className="bg-white p-5 rounded-md shadow-md// border border-gray-300 w-full">
             <div className="flex items-center gap-5 text-[20px] mb-5">
               <Filter />
               <span>Filter</span>
@@ -317,7 +265,7 @@ export default function MapPage() {
                   <th className="px-4 py-2 text-left">Units Sold</th>
                   <th className="px-4 py-2 text-left">Net Sales</th>
                   <th className="px-4 py-2 text-left">Stock Opening</th>
-                  {/* <th className="px-4 py-2 text-left">Lead Time</th> */}
+
                   <th className="px-4 py-2 text-left">Alert</th>
                 </tr>
               </thead>
@@ -354,9 +302,6 @@ export default function MapPage() {
                     <td className="px-4 py-2">
                       {product.stock_opening ? product.stock_opening : "null"}
                     </td>
-                    {/* <td className="px-4 py-2">
-                      {product.lead_time_days ? product.lead_time_days : "null"}
-                    </td> */}
                     <td className="px-4 py-2">
                       <span
                         className={`px-4 py-1 ${
@@ -372,43 +317,12 @@ export default function MapPage() {
             </table>
           </div>
         </div>
-        {/* <div className="mt-10" id="stock-alerts">
-          <SubTitle text="Stock Alerts" />
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full table-auto">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="px-4 py-2 text-left">SKU ID</th>
-                  <th className="px-4 py-2 text-left">Product Name</th>
-                  <th className="px-4 py-2 text-left">Store ID</th>
-                  <th className="px-4 py-2 text-left">Stock on Hand</th>
-                  <th className="px-4 py-2 text-left">Avg Daily Sales</th>
-                  <th className="px-4 py-2 text-left">Days Left</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stockAlerts.map((alert, index) => (
-                  <tr
-                    key={`${alert.sku_id}-${alert.store_id}`}
-                    className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
-                  >
-                    <td className="px-4 py-2">{alert.sku_id}</td>
-                    <td className="px-4 py-2">{alert.sku_name}</td>
-                    <td className="px-4 py-2">{alert.store_id}</td>
-                    <td className="px-4 py-2">{alert.stock_on_hand}</td>
-                    <td className="px-4 py-2">
-                      {alert.avg_daily_sales.toFixed(2)}
-                    </td>
-                    <td className="px-4 py-2">
-                      {alert.days_left ? alert.days_left.toFixed(1) : "N/A"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="mt-10" id="stock-alerts">
+          <SubTitle text="Stock Alerts & Inventory Warnings" />
+          <div className="bg-white p-5 rounded-lg shadow-md// border border-gray-200 mt-3">
+            <StockAlerts />
           </div>
-        </div> */}
+        </div>
       </div>
     </>
   );

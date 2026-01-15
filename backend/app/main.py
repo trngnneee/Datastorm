@@ -548,6 +548,100 @@ async def predict_7days(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get('/stock_alerts')
+def get_stock_alerts(
+    db: Session = Depends(get_db),
+    country: str = Query("all", description="Filter by country"),
+    urgency: str = Query("all", description="Filter by urgency: critical, warning, all"),
+):
+    """
+    Get stock alerts for items below safety stock levels.
+    Returns items with low stock that may lead to stockouts.
+    """
+    from sqlalchemy import and_, or_
+    
+    # Get latest date for each SKU-Store combination
+    latest_records = db.query(
+        SalesFact.sku_id,
+        SalesFact.store_id,
+        func.max(SalesFact.date).label("latest_date")
+    ).group_by(SalesFact.sku_id, SalesFact.store_id).subquery()
+    
+    # Join with latest records
+    query = db.query(
+        SalesFact.sku_id,
+        SalesFact.sku_name,
+        SalesFact.store_id,
+        SalesFact.city,
+        SalesFact.stock_on_hand,
+        SalesFact.stock_opening,
+        SalesFact.lead_time_days,
+        func.avg(SalesFact.units_sold).label("avg_daily_sales"),
+    ).join(
+        latest_records,
+        and_(
+            SalesFact.sku_id == latest_records.c.sku_id,
+            SalesFact.store_id == latest_records.c.store_id,
+            SalesFact.date == latest_records.c.latest_date
+        )
+    )
+    
+    if country != "all":
+        query = query.filter(SalesFact.country == country)
+    
+    # Filter for low stock or stockout
+    query = query.filter(
+        or_(
+            SalesFact.stock_on_hand < SalesFact.stock_opening * 0.2,
+            SalesFact.stock_out_flag == True
+        )
+    ).group_by(
+        SalesFact.sku_id, SalesFact.sku_name, SalesFact.store_id,
+        SalesFact.city, SalesFact.stock_on_hand, SalesFact.stock_opening,
+        SalesFact.lead_time_days
+    ).order_by(SalesFact.stock_on_hand.asc())
+    
+    alerts = []
+    for row in query.all():
+        avg_daily = row.avg_daily_sales or 1
+        stock_level = row.stock_on_hand or 0
+        days_left = stock_level / avg_daily if avg_daily > 0 else 0
+        lead_time = row.lead_time_days or 7
+        
+        # Determine urgency
+        if stock_level == 0 or days_left < lead_time:
+            alert_urgency = "critical"
+        elif days_left < lead_time + 3:
+            alert_urgency = "warning"
+        else:
+            alert_urgency = "info"
+        
+        if urgency != "all" and alert_urgency != urgency:
+            continue
+        
+        alerts.append({
+            "sku_id": row.sku_id,
+            "sku_name": row.sku_name,
+            "store_id": row.store_id,
+            "city": row.city,
+            "current_stock": int(row.stock_on_hand or 0),
+            "safety_stock": int(row.stock_opening or 0),
+            "avg_daily_sales": round(float(row.avg_daily_sales or 0), 2),
+            "days_until_stockout": round(float(days_left), 1),
+            "lead_time_days": int(row.lead_time_days or 0),
+            "recommended_order_qty": max(int(row.stock_opening or 0) * 2 - int(row.stock_on_hand or 0), 0),
+            "urgency": alert_urgency,
+        })
+    
+    return {
+        "data": alerts,
+        "summary": {
+            "critical_count": sum(1 for a in alerts if a["urgency"] == "critical"),
+            "warning_count": sum(1 for a in alerts if a["urgency"] == "warning"),
+            "total_alerts": len(alerts)
+        }
+    }
+
 @app.get('/detail')
 def get_sales_fact_detail(
     store_id: str = Query(..., description="Store ID"),
@@ -591,6 +685,157 @@ def get_sales_fact_detail(
         "longitude": float(row.longitude) if row.longitude is not None else 0.0,
         "weekday": row.weekday,
         "month": row.month,
+    }
+
+# ==================== FINANCIAL ANALYTICS ====================
+
+@app.get('/analytics/revenue')
+def get_revenue_analytics(
+    db: Session = Depends(get_db),
+    country: str = Query("all", description="Filter by country"),
+    year: str = Query("all", description="Filter by year"),
+    month: str = Query("all", description="Filter by month"),
+):
+    """
+    Get revenue analytics with trends and breakdown.
+    """
+    query = db.query(
+        SalesFact.date,
+        func.sum(SalesFact.net_sales).label("total_revenue"),
+        func.sum(SalesFact.units_sold).label("total_units"),
+        func.count(func.distinct(SalesFact.store_id)).label("store_count")
+    )
+    
+    if country != "all":
+        query = query.filter(SalesFact.country == country)
+    if year != "all":
+        query = query.filter(func.extract("year", SalesFact.date) == int(year))
+    if month != "all":
+        query = query.filter(func.extract("month", SalesFact.date) == int(month))
+    
+    rows = query.group_by(SalesFact.date).order_by(SalesFact.date).all()
+    
+    total_revenue = sum(float(r.total_revenue or 0) for r in rows)
+    total_units = sum(int(r.total_units or 0) for r in rows)
+    avg_revenue_per_day = total_revenue / len(rows) if rows else 0
+    
+    return {
+        "data": [
+            {
+                "date": r.date,
+                "revenue": float(r.total_revenue or 0),
+                "units": int(r.total_units or 0),
+                "stores": int(r.store_count or 0)
+            }
+            for r in rows
+        ],
+        "summary": {
+            "total_revenue": round(total_revenue, 2),
+            "total_units": total_units,
+            "avg_daily_revenue": round(avg_revenue_per_day, 2),
+            "period_days": len(rows)
+        }
+    }
+
+@app.get('/analytics/profit')
+def get_profit_analytics(
+    db: Session = Depends(get_db),
+    country: str = Query("all", description="Filter by country"),
+    year: str = Query("all", description="Filter by year"),
+):
+    """
+    Get profit margin analytics by category and time period.
+    """
+    query = db.query(
+        SalesFact.category,
+        func.sum(SalesFact.net_sales).label("total_revenue"),
+        func.sum(SalesFact.purchase_cost * SalesFact.units_sold).label("total_cost"),
+        func.count(func.distinct(SalesFact.date)).label("days"),
+        func.avg(SalesFact.margin_pct).label("avg_margin")
+    )
+    
+    if country != "all":
+        query = query.filter(SalesFact.country == country)
+    if year != "all":
+        query = query.filter(func.extract("year", SalesFact.date) == int(year))
+    
+    rows = query.group_by(SalesFact.category).all()
+    
+    categories_profit = []
+    total_revenue = 0
+    total_cost = 0
+    
+    for row in rows:
+        revenue = float(row.total_revenue or 0)
+        cost = float(row.total_cost or 0)
+        profit = revenue - cost
+        margin = (profit / revenue * 100) if revenue > 0 else 0
+        
+        total_revenue += revenue
+        total_cost += cost
+        
+        categories_profit.append({
+            "category": row.category,
+            "revenue": round(revenue, 2),
+            "cost": round(cost, 2),
+            "profit": round(profit, 2),
+            "margin_pct": round(margin, 2),
+            "days": int(row.days or 0)
+        })
+    
+    overall_profit = total_revenue - total_cost
+    overall_margin = (overall_profit / total_revenue * 100) if total_revenue > 0 else 0
+    
+    return {
+        "data": sorted(categories_profit, key=lambda x: x["profit"], reverse=True),
+        "summary": {
+            "total_revenue": round(total_revenue, 2),
+            "total_cost": round(total_cost, 2),
+            "total_profit": round(overall_profit, 2),
+            "overall_margin_pct": round(overall_margin, 2)
+        }
+    }
+
+@app.get('/analytics/kpi')
+def get_kpi_analytics(
+    db: Session = Depends(get_db),
+    country: str = Query("all", description="Filter by country"),
+):
+    """
+    Get key performance indicators for the business.
+    """
+    query = db.query(SalesFact)
+    
+    if country != "all":
+        query = query.filter(SalesFact.country == country)
+    
+    # Overall metrics
+    total_records = db.query(func.count(SalesFact.sku_id)).filter(
+        SalesFact.country == country if country != "all" else True
+    ).scalar()
+    
+    stockout_count = db.query(func.count()).filter(
+        SalesFact.stock_out_flag == True,
+        SalesFact.country == country if country != "all" else True
+    ).scalar()
+    
+    promo_sales = db.query(func.sum(SalesFact.net_sales)).filter(
+        SalesFact.promo_flag == True,
+        SalesFact.country == country if country != "all" else True
+    ).scalar()
+    
+    total_sales = db.query(func.sum(SalesFact.net_sales)).filter(
+        SalesFact.country == country if country != "all" else True
+    ).scalar()
+    
+    return {
+        "data": {
+            "total_transactions": int(total_records or 0),
+            "stockout_rate_pct": round((stockout_count / total_records * 100) if total_records > 0 else 0, 2),
+            "promo_contribution_pct": round((float(promo_sales or 0) / float(total_sales or 1) * 100), 2),
+            "total_sales": round(float(total_sales or 0), 2),
+            "promo_sales": round(float(promo_sales or 0), 2)
+        }
     }
 
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')

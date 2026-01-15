@@ -46,7 +46,7 @@ export const GroupBarChart = () => {
 
   return (
     <>
-      <div className="bg-white p-5 rounded-md// shadow-md border border-gray-300 w-full h-full rounded-md">
+      <div className="bg-white p-5 rounded-md// shadow-md// border border-gray-300 w-full h-full rounded-md">
         <div className="text-center text-xl">
           Unit sold between Holiday/Non-holiday and Weekday/Weekend
         </div>
@@ -59,8 +59,8 @@ export const GroupBarChart = () => {
           <BarChart
             data={chartData}
             margin={{ top: 20, right: 20, left: 20, bottom: 5 }}
-            barCategoryGap="20%"   // Khoảng cách giữa các nhóm, giảm % để nhóm gần nhau hơn
-            barGap={2}             // Khoảng cách giữa các thanh trong cùng 1 nhóm
+            barCategoryGap="20%" // Khoảng cách giữa các nhóm, giảm % để nhóm gần nhau hơn
+            barGap={2} // Khoảng cách giữa các thanh trong cùng 1 nhóm
           >
             <XAxis dataKey="group" tick={{ fontSize: 12 }} />
             <YAxis

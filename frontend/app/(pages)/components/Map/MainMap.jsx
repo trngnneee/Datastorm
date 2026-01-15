@@ -13,19 +13,19 @@ export const MainMap = () => {
       await fetch(`${process.env.NEXT_PUBLIC_API_URL}/net_sales/location`)
         .then((response) => response.json())
         .then((data) => {
-          setStorePoints(data)
-        })
-    }
-    fetchData()
+          setStorePoints(data);
+        });
+    };
+    fetchData();
   }, []);
 
-  const { current: map } = useMap()
+  const { current: map } = useMap();
   useEffect(() => {
     if (!map || storePoints?.features?.length === 0) return;
 
     const bounds = new maplibregl.LngLatBounds();
 
-    storePoints.features.forEach(f => {
+    storePoints.features.forEach((f) => {
       bounds.extend(f.geometry.coordinates);
     });
 
@@ -41,7 +41,7 @@ export const MainMap = () => {
         <Map
           initialViewState={{
             longitude: 10,
-            latitude: 52,
+            latitude: 47,
             zoom: zoom,
           }}
           maxBounds={[
@@ -64,16 +64,21 @@ export const MainMap = () => {
                   "interpolate",
                   ["linear"],
                   ["get", "net_sales"],
-                  0, 4,
-                  1_000_000, 22,
+                  0,
+                  4,
+                  1_000_000,
+                  22,
                 ],
                 "circle-color": [
                   "interpolate",
                   ["linear"],
                   ["get", "stock_out_rate"],
-                  0, "#22c55e",
-                  0.5, "#f97316",
-                  1, "#ef4444",
+                  0,
+                  "#22c55e",
+                  0.5,
+                  "#f97316",
+                  1,
+                  "#ef4444",
                 ],
                 "circle-opacity": 0.75,
                 "circle-stroke-width": 1,
@@ -99,5 +104,5 @@ export const MainMap = () => {
         </Map>
       )}
     </>
-  )
-}
+  );
+};
