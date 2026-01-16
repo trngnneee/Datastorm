@@ -8,10 +8,6 @@ const LoadingContext = createContext(null);
 export const LoadingProvider = ({ children }) => {
   const [loadingCount, setLoadingCount] = useState(0);
 
-  useEffect(() => {
-    console.log("loadingCount:", loadingCount);
-  }, [loadingCount]);
-
   const isLoading = loadingCount > 0;
 
   useEffect(() => {

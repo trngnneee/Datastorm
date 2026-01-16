@@ -8,6 +8,8 @@ import httpx
 from datetime import datetime
 import os
 from google import genai
+from upstash_redis.asyncio import Redis
+import json
 
 app = FastAPI(
     title="FMCG Sales Data API",
@@ -24,6 +26,12 @@ app.add_middleware(
     allow_methods=["*"], 
     allow_headers=["*"],
 )
+
+redis_client = Redis(
+    url=os.getenv("UPSTASH_REDIS_REST_URL"),
+    token=os.getenv("UPSTASH_REDIS_REST_TOKEN"),
+)
+CACHE_TTL = 600
 
 @app.get("/information")
 def get_information(db: Session = Depends(get_db)):
@@ -220,13 +228,23 @@ def get_unit_sold_statistics(
     return result
 
 @app.get("/sku/top")
-def get_top_skus(
+async def get_top_skus(
     country: str = Query("all", description="Country to filter by"),
     db: Session = Depends(get_db),
     year: str = Query("all", description="Filter by year, use 'all' for no filter"),
     month: str = Query("all", description="Filter by month, use 'all' for no filter"),
     limit: int = Query(20, description="Number of top SKUs to return"),
 ):
+    cache_key = f"top_skus:{country}:{year}:{month}:{limit}"
+
+    cached = await redis_client.get(cache_key)
+    if cached:
+        cached_data = json.loads(cached)
+        return {
+            "source": "redis",
+            **cached_data
+        }
+
     # Subquery: sum units_sold per sku per store
     sales_per_sku_store = db.query(
         SalesFact.sku_id,
@@ -322,7 +340,7 @@ def get_top_skus(
 
     rows = query.all()
 
-    return {
+    result = {
         "data": [
             {
                 "sku_id": r.sku_id,
@@ -339,6 +357,17 @@ def get_top_skus(
             }
             for r in rows
         ]
+    }
+
+    await redis_client.set(
+        cache_key,
+        json.dumps(result),
+        ex=CACHE_TTL
+    )
+
+    return {
+        "source": "db",
+        **result
     }
 
 @app.get("/unit_sold/promo")
@@ -381,12 +410,22 @@ def get_units_sold_discount_scatter(
     }
 
 @app.get("/net_sales/location")
-def get_net_sales_by_location(
+async def get_net_sales_by_location(
     db: Session = Depends(get_db),
     country: str = Query("all", description="Country to filter by"),
     year: str = Query("all", description="Filter by year, use 'all' for no filter"),
     month: str = Query("all", description="Filter by month, use 'all' for no filter")
 ):
+    cache_key = f"net_sales_location:{country}:{year}:{month}"
+
+    cached = await redis_client.get(cache_key)
+    if cached:
+        cached_data = json.loads(cached)
+        return {
+            "source": "redis",
+            **cached_data
+        }
+
     query = db.query(
         SalesFact.store_id,
         SalesFact.latitude,
@@ -417,14 +456,14 @@ def get_net_sales_by_location(
 
     rows = query.all()
 
-    return {
+    result = {
         "type": "FeatureCollection",
         "features": [
             {
                 "type": "Feature",
                 "geometry": {
                     "type": "Point",
-                    "coordinates": [r.longitude, r.latitude],
+                    "coordinates": [float(r.longitude), float(r.latitude)],
                 },
                 "properties": {
                     "store_id": r.store_id,
@@ -439,6 +478,17 @@ def get_net_sales_by_location(
             for r in rows
             if r.latitude is not None and r.longitude is not None
         ],
+    }
+    
+    await redis_client.set(
+        cache_key,
+        json.dumps(result),
+        ex=CACHE_TTL
+    )
+
+    return {
+        "source": "db",
+        **result
     }
 
 @app.get('/store/list')
@@ -559,7 +609,7 @@ async def predict_7days(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get('/stock_alerts')
-def get_stock_alerts(
+async def get_stock_alerts(
     db: Session = Depends(get_db),
     country: str = Query("all", description="Filter by country"),
     urgency: str = Query("all", description="Filter by urgency: critical, warning, all"),
@@ -569,6 +619,16 @@ def get_stock_alerts(
     Returns items with low stock that may lead to stockouts.
     """
     from sqlalchemy import and_, or_
+
+    cache_key = f"stock_alerts:{country}:{urgency}"
+
+    cached = await redis_client.get(cache_key)
+    if cached:
+        cached_data = json.loads(cached)
+        return {
+            "source": "redis",
+            **cached_data
+        }
     
     # Get latest date for each SKU-Store combination
     latest_records = db.query(
@@ -643,13 +703,24 @@ def get_stock_alerts(
             "urgency": alert_urgency,
         })
     
-    return {
+    result = {
         "data": alerts,
         "summary": {
             "critical_count": sum(1 for a in alerts if a["urgency"] == "critical"),
             "warning_count": sum(1 for a in alerts if a["urgency"] == "warning"),
             "total_alerts": len(alerts)
         }
+    }
+
+    await redis_client.set(
+        cache_key,
+        json.dumps(result),
+        ex=CACHE_TTL
+    )
+
+    return {
+        "source": "db",
+        **result
     }
 
 @app.get('/detail')
@@ -700,7 +771,7 @@ def get_sales_fact_detail(
 # ==================== FINANCIAL ANALYTICS ====================
 
 @app.get('/analytics/revenue')
-def get_revenue_analytics(
+async def get_revenue_analytics(
     db: Session = Depends(get_db),
     country: str = Query("all", description="Filter by country"),
     year: str = Query("all", description="Filter by year"),
@@ -709,6 +780,16 @@ def get_revenue_analytics(
     """
     Get revenue analytics with trends and breakdown.
     """
+    cache_key = f"revenue:{country}:{year}:{month}"
+
+    cached = await redis_client.get(cache_key)
+    if cached:
+        cached_data = json.loads(cached)
+        return {
+            "source": "redis",
+            **cached_data
+        }
+
     query = db.query(
         SalesFact.date,
         func.sum(SalesFact.net_sales).label("total_revenue"),
@@ -728,11 +809,11 @@ def get_revenue_analytics(
     total_revenue = sum(float(r.total_revenue or 0) for r in rows)
     total_units = sum(int(r.total_units or 0) for r in rows)
     avg_revenue_per_day = total_revenue / len(rows) if rows else 0
-    
-    return {
+
+    result = {
         "data": [
             {
-                "date": r.date,
+                "date": r.date.isoformat(),
                 "revenue": float(r.total_revenue or 0),
                 "units": int(r.total_units or 0),
                 "stores": int(r.store_count or 0)
@@ -747,15 +828,34 @@ def get_revenue_analytics(
         }
     }
 
+    await redis_client.set(cache_key, json.dumps(result), ex=CACHE_TTL)
+    
+    return {
+        "source": "db",
+        **result
+    }
+
 @app.get('/analytics/profit')
-def get_profit_analytics(
+async def get_profit_analytics(
     db: Session = Depends(get_db),
     country: str = Query("all", description="Filter by country"),
     year: str = Query("all", description="Filter by year"),
+    month: str = Query("all", description="Filter by month")
 ):
     """
     Get profit margin analytics by category and time period.
     """
+    cache_key = f"profit:{country}:{year}:{month}"
+    print("CACHE KEY:", cache_key)
+
+    cached = await redis_client.get(cache_key)
+    if cached:
+        cached_data = json.loads(cached)
+        return {
+            "source": "redis",
+            **cached_data
+        }
+
     query = db.query(
         SalesFact.category,
         func.sum(SalesFact.net_sales).label("total_revenue"),
@@ -768,6 +868,8 @@ def get_profit_analytics(
         query = query.filter(SalesFact.country == country)
     if year != "all":
         query = query.filter(func.extract("year", SalesFact.date) == int(year))
+    if month != "all":
+        query = query.filter(func.extract("month", SalesFact.date) == int(month))
     
     rows = query.group_by(SalesFact.category).all()
     
@@ -795,15 +897,22 @@ def get_profit_analytics(
     
     overall_profit = total_revenue - total_cost
     overall_margin = (overall_profit / total_revenue * 100) if total_revenue > 0 else 0
-    
-    return {
+
+    result = {
         "data": sorted(categories_profit, key=lambda x: x["profit"], reverse=True),
         "summary": {
             "total_revenue": round(total_revenue, 2),
             "total_cost": round(total_cost, 2),
             "total_profit": round(overall_profit, 2),
-            "overall_margin_pct": round(overall_margin, 2)
+            "overall_margin_pct": round(overall_margin, 2),
         }
+    }
+    
+    await redis_client.set(cache_key, json.dumps(result), ex=CACHE_TTL)
+
+    return {
+        "source": "db",
+        **result
     }
 
 @app.get('/analytics/kpi')
@@ -1151,13 +1260,23 @@ def get_channel_list(db: Session = Depends(get_db)):
     return {"data": result}
 
 @app.get('/analytics/channel')
-def get_channel_analytics(
+async def get_channel_analytics(
     db: Session = Depends(get_db),
     country: str = Query("all", description="Filter by country"),
     year: str = Query("all", description="Filter by year"),
     month: str = Query("all", description="Filter by month"),
 ):
     """Get detailed channel performance analytics."""
+    cache_key = f"channel_analytics:{country}:{year}:{month}"
+
+    cached = await redis_client.get(cache_key)
+    if cached:
+        cached_data = json.loads(cached)
+        return {
+            "source": "redis",
+            **cached_data
+        }
+
     query = db.query(
         SalesFact.channel,
         func.sum(SalesFact.net_sales).label("total_sales"),
@@ -1180,7 +1299,7 @@ def get_channel_analytics(
     
     total_sales = sum(float(r.total_sales or 0) for r in rows)
     
-    return {
+    result = {
         "data": [
             {
                 "channel": r.channel,
@@ -1201,8 +1320,19 @@ def get_channel_analytics(
         }
     }
 
+    await redis_client.set(
+        cache_key,
+        json.dumps(result),
+        ex=CACHE_TTL
+    )
+
+    return {
+        "source": "db",
+        **result
+    }
+
 @app.get('/analytics/channel/daily')
-def get_channel_daily_sales(
+async def get_channel_daily_sales(
     db: Session = Depends(get_db),
     country: str = Query("all", description="Filter by country"),
     channel: str = Query("all", description="Filter by channel"),
@@ -1210,6 +1340,15 @@ def get_channel_daily_sales(
     month: str = Query("all", description="Filter by month"),
 ):
     """Get daily sales trend by channel."""
+    cache_key = f"channel_daily_sales:{country}:{channel}:{year}:{month}"
+    cached = await redis_client.get(cache_key)
+    if cached:
+        cached_data = json.loads(cached)
+        return {
+            "source": "redis",
+            **cached_data
+        }
+
     query = db.query(
         SalesFact.date,
         SalesFact.channel,
@@ -1228,7 +1367,7 @@ def get_channel_daily_sales(
     
     rows = query.group_by(SalesFact.date, SalesFact.channel).order_by(SalesFact.date).all()
     
-    return {
+    result = {
         "data": [
             {
                 "date": r.date,
@@ -1240,16 +1379,36 @@ def get_channel_daily_sales(
         ]
     }
 
+    await redis_client.set(
+        cache_key,
+        json.dumps(result, default=str),
+        ex=CACHE_TTL
+    )
+
+    return {
+        "source": "db",
+        **result
+    }
+
 # ==================== PRICE & DISCOUNT ANALYTICS ====================
 
 @app.get('/analytics/pricing')
-def get_pricing_analytics(
+async def get_pricing_analytics(
     db: Session = Depends(get_db),
     country: str = Query("all", description="Filter by country"),
     year: str = Query("all", description="Filter by year"),
     month: str = Query("all", description="Filter by month"),
 ):
     """Get pricing and discount effectiveness analysis."""
+    cache_key = f"pricing_analytics:{country}:{year}:{month}"
+    cached = await redis_client.get(cache_key)
+    if cached:
+        cached_data = json.loads(cached)
+        return {
+            "source": "redis",
+            **cached_data
+        }
+
     query = db.query(
         SalesFact.category,
         func.avg(SalesFact.list_price).label("avg_list_price"),
@@ -1269,7 +1428,7 @@ def get_pricing_analytics(
     
     rows = query.group_by(SalesFact.category).all()
     
-    return {
+    result = {
         "data": [
             {
                 "category": r.category,
@@ -1284,13 +1443,32 @@ def get_pricing_analytics(
         ]
     }
 
+    await redis_client.set(
+        cache_key,
+        json.dumps(result),
+        ex=CACHE_TTL
+    )   
+
+    return {
+        "source": "db",
+        **result
+    }
+
 @app.get('/analytics/discount-impact')
-def get_discount_impact(
+async def get_discount_impact(
     db: Session = Depends(get_db),
     country: str = Query("all", description="Filter by country"),
     year: str = Query("all", description="Filter by year"),
 ):
     """Analyze discount effectiveness on units sold."""
+    cache_key = f"discount_impact:{country}:{year}"
+    cached = await redis_client.get(cache_key)
+    if cached:
+        cached_data = json.loads(cached)
+        return {
+            "source": "redis",
+            **cached_data
+        }
     # Compare discounted vs non-discounted sales
     query = db.query(
         SalesFact.category,
@@ -1309,7 +1487,7 @@ def get_discount_impact(
     
     rows = query.group_by(SalesFact.category).all()
     
-    return {
+    result = {
         "data": [
             {
                 "category": r.category,
@@ -1325,6 +1503,17 @@ def get_discount_impact(
         ]
     }
 
+    await redis_client.set(
+        cache_key,
+        json.dumps(result),
+        ex=CACHE_TTL
+    )   
+
+    return {
+        "source": "db",
+        **result
+    }
+
 # ==================== SUPPLIER ANALYTICS ====================
 
 @app.get('/supplier/list')
@@ -1335,12 +1524,21 @@ def get_supplier_list(db: Session = Depends(get_db)):
     return {"data": result}
 
 @app.get('/analytics/supplier')
-def get_supplier_performance(
+async def get_supplier_performance(
     db: Session = Depends(get_db),
     country: str = Query("all", description="Filter by country"),
     year: str = Query("all", description="Filter by year"),
 ):
     """Analyze supplier performance and costs."""
+    cache_key = f"supplier_performance:{country}:{year}"
+    cached = await redis_client.get(cache_key)
+    if cached:
+        cached_data = json.loads(cached)
+        return {
+            "source": "redis",
+            **cached_data
+        }
+
     query = db.query(
         SalesFact.supplier_id,
         func.count(func.distinct(SalesFact.sku_id)).label("products_supplied"),
@@ -1358,7 +1556,7 @@ def get_supplier_performance(
     
     rows = query.group_by(SalesFact.supplier_id).all()
     
-    return {
+    result = {
         "data": [
             {
                 "supplier_id": r.supplier_id,
@@ -1375,16 +1573,36 @@ def get_supplier_performance(
         ]
     }
 
+    await redis_client.set(
+        cache_key,
+        json.dumps(result),
+        ex=CACHE_TTL
+    )   
+
+    return {
+        "source": "db",
+        **result
+    }
+
 # ==================== WEATHER CORRELATION ====================
 
 @app.get('/analytics/weather-correlation')
-def get_weather_correlation(
+async def get_weather_correlation(
     db: Session = Depends(get_db),
     country: str = Query("all", description="Filter by country"),
     year: str = Query("all", description="Filter by year"),
     month: str = Query("all", description="Filter by month"),
 ):
     """Analyze correlation between weather and sales."""
+    cache_key = f"weather_correlation:{country}:{year}:{month}"
+    cached = await redis_client.get(cache_key)
+    if cached:
+        cached_data = json.loads(cached)
+        return {
+            "source": "redis",
+            **cached_data
+        }
+
     query = db.query(
         SalesFact.date,
         func.avg(SalesFact.temperature).label("avg_temp"),
@@ -1402,7 +1620,7 @@ def get_weather_correlation(
     
     rows = query.group_by(SalesFact.date).order_by(SalesFact.date).all()
     
-    return {
+    result = {
         "data": [
             {
                 "date": r.date,
@@ -1415,13 +1633,33 @@ def get_weather_correlation(
         ]
     }
 
+    await redis_client.set(
+        cache_key,
+        json.dumps(result, default=str),
+        ex=CACHE_TTL
+    )
+
+    return {
+        "source": "db",
+        **result
+    }
+
 @app.get('/analytics/weather-by-category')
-def get_weather_category_analysis(
+async def get_weather_category_analysis(
     db: Session = Depends(get_db),
     country: str = Query("all", description="Filter by country"),
     year: str = Query("all", description="Filter by year"),
 ):
     """Analyze weather impact by product category."""
+    cache_key = f"weather_by_category:{country}:{year}"
+    cached = await redis_client.get(cache_key)
+    if cached:
+        cached_data = json.loads(cached)
+        return {
+            "source": "redis",
+            **cached_data
+        }
+
     # Segment by temperature ranges
     query = db.query(
         SalesFact.category,
@@ -1443,7 +1681,7 @@ def get_weather_category_analysis(
     
     rows = query.group_by(SalesFact.category, "temp_segment").all()
     
-    return {
+    result = {
         "data": [
             {
                 "category": r.category,
@@ -1456,15 +1694,35 @@ def get_weather_category_analysis(
         ]
     }
 
+    await redis_client.set(
+        cache_key,
+        json.dumps(result),
+        ex=CACHE_TTL
+    )
+
+    return {
+        "source": "db",
+        **result
+    }
+
 # ==================== INVENTORY OPTIMIZATION ====================
 
 @app.get('/analytics/inventory-optimization')
-def get_inventory_optimization(
+async def get_inventory_optimization(
     db: Session = Depends(get_db),
     country: str = Query("all", description="Filter by country"),
     year: str = Query("all", description="Filter by year"),
 ):
     """Get inventory optimization metrics and recommendations."""
+    cache_key = f"inventory_optimization:{country}:{year}"
+    cached = await redis_client.get(cache_key)
+    if cached:
+        cached_data = json.loads(cached)
+        return {
+            "source": "redis",
+            **cached_data
+        }
+
     # Get latest inventory status for each SKU-Store
     latest_records = db.query(
         SalesFact.sku_id,
@@ -1536,11 +1794,22 @@ def get_inventory_optimization(
             "priority": priority,
         })
     
-    return {
+    result = {
         "data": inventory_data,
         "summary": {
             "high_priority_count": sum(1 for i in inventory_data if i["priority"] == "High"),
             "medium_priority_count": sum(1 for i in inventory_data if i["priority"] == "Medium"),
             "optimal_count": sum(1 for i in inventory_data if i["priority"] == "Low"),
         }
+    }
+
+    await redis_client.set(
+        cache_key,
+        json.dumps(result),
+        ex=CACHE_TTL
+    )
+
+    return {
+        "source": "db",
+        **result
     }
