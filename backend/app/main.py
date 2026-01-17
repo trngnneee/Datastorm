@@ -684,7 +684,7 @@ async def predict_7days(
 
         # Send to AI server
         async with httpx.AsyncClient() as client:
-            response = await client.post("http://localhost:8001/ai/predict_7days", json=body, timeout=30.0)
+            response = await client.post("http://3.27.185.230:8001/ai/predict_7days", json=body, timeout=30.0)
             response.raise_for_status()
             result = response.json()
 
