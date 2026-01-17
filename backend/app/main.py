@@ -291,6 +291,7 @@ async def get_top_skus(
         SalesFact.supplier_id,
         SalesFact.stock_opening,
         SalesFact.lead_time_days,
+        SalesFact.net_sales,
         func.row_number().over(
             partition_by=[SalesFact.sku_id, SalesFact.store_id],
             order_by=SalesFact.date.desc()
@@ -317,7 +318,8 @@ async def get_top_skus(
         latest_details.c.brand,
         latest_details.c.supplier_id,
         latest_details.c.stock_opening,
-        latest_details.c.lead_time_days
+        latest_details.c.lead_time_days,
+        latest_details.c.net_sales,
     ).filter(latest_details.c.rn == 1).subquery()
 
     # Final query: combine all
@@ -332,7 +334,8 @@ async def get_top_skus(
         details_ranked.c.city,
         top_store_per_sku.c.units_sold,
         details_ranked.c.stock_opening,
-        details_ranked.c.lead_time_days
+        details_ranked.c.lead_time_days,
+        details_ranked.c.net_sales,
     ).join(
         details_ranked,
         (top_store_per_sku.c.sku_id == details_ranked.c.sku_id) &
@@ -354,7 +357,9 @@ async def get_top_skus(
                 "city": r.city,
                 "units_sold": int(r.units_sold),
                 "stock_opening": int(r.stock_opening) if r.stock_opening else 0,
-                "lead_time_days": int(r.lead_time_days) if r.lead_time_days else 0
+                "lead_time_days": int(r.lead_time_days) if r.lead_time_days else 0,
+                "net_sales": float(r.net_sales) if r.net_sales else 0.0,
+                
             }
             for r in rows
         ]
