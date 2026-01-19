@@ -5,9 +5,7 @@
 ---
 
 <p align="center">
-  <a href="#">
-    <img src="https://github.com/DomTechnology/datastorm/images/banner.png" alt="Sponsor 1"/>
-  </a>
+    <img src="https://github.com/DomTechnology/datastorm/blob/main/images/banner.png" alt="banner" height="80"/>
 </p>
 
 ---
