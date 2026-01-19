@@ -5,7 +5,7 @@
 ---
 
 <p align="center">
-    <img src="https://github.com/DomTechnology/datastorm/blob/main/images/banner.png" alt="banner" height="80"/>
+    <img src="https://github.com/DomTechnology/datastorm/blob/main/images/banner.png" alt="banner"/>
 </p>
 
 ---
