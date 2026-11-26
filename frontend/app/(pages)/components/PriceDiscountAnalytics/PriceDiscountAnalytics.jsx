@@ -1,22 +1,63 @@
-import React, { useEffect, useState } from "react";
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  BarChart,
   Bar,
-  ScatterChart,
-  Scatter,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Cell,
 } from "recharts";
+import { Lightbulb, Percent, Tag, TrendingDown, TrendingUp } from "lucide-react";
 import { useFilterStore } from "@/app/store/useFilterStore";
 import { toast } from "sonner";
-import { TrendingUp } from "lucide-react";
+import { Metric, Panel, PanelHeader } from "@/components/dashboard/panel";
+import { EmptyState, InsightList, Skeleton } from "@/components/dashboard/feedback";
+import { DataTable, TBody, TD, TH, THead, TR } from "@/components/dashboard/data-table";
+import {
+  ChartFrame,
+  ChartTooltip,
+  barCursor,
+  fmt,
+  gridProps,
+  useChartAnimation,
+  xAxisProps,
+  yAxisProps,
+} from "@/components/dashboard/chart-kit";
+import { cn } from "@/lib/utils";
 
-const GRADIENT_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
+function CategoryBars({ data, dataKey, name, formatter, tickFormatter }) {
+  const animate = useChartAnimation();
+  return (
+    <ChartFrame height={260}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+          <CartesianGrid {...gridProps} />
+          <XAxis
+            dataKey="category"
+            {...xAxisProps}
+            interval={0}
+            angle={-30}
+            textAnchor="end"
+            height={64}
+          />
+          <YAxis {...yAxisProps} tickFormatter={tickFormatter} />
+          <Tooltip cursor={barCursor} content={<ChartTooltip valueFormatter={formatter} />} />
+          <Bar
+            dataKey={dataKey}
+            name={name}
+            fill="var(--chart-1)"
+            radius={[4, 4, 0, 0]}
+            maxBarSize={40}
+            isAnimationActive={animate}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartFrame>
+  );
+}
 
 export const PriceDiscountAnalytics = () => {
   const selectedCountry = useFilterStore((state) => state.selectedCountry);
@@ -28,6 +69,7 @@ export const PriceDiscountAnalytics = () => {
 
   useEffect(() => {
     fetchPricingData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCountry, selectedYear]);
 
   const fetchPricingData = async () => {
@@ -52,236 +94,182 @@ export const PriceDiscountAnalytics = () => {
     }
   };
 
-  return (
-    <div className="w-full space-y-6">
-      {/* Pricing Overview by Category */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <h3 className="text-lg font-semibold mb-4 text-gray-800">
-          Pricing & Margin Analysis by Category
-        </h3>
+  const insights = useMemo(() => {
+    if (!discountImpactData.length) return null;
+    const avg =
+      discountImpactData.reduce((sum, item) => sum + item.units_lift_pct, 0) /
+      discountImpactData.length;
+    const best = discountImpactData.reduce((max, item) =>
+      item.units_lift_pct > max.units_lift_pct ? item : max
+    );
+    return { avg, best };
+  }, [discountImpactData]);
 
-        {pricingData.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                    Category
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    List Price
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    Avg Discount
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    Price Realization
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    Margin %
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    Total Sales
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    Units
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {pricingData.map((item, idx) => (
-                  <tr
-                    key={item.category}
-                    className="hover:bg-gray-50 transition"
-                  >
-                    <td className="px-4 py-3 font-medium text-gray-800">
-                      {item.category}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-600">
-                      ${item.avg_list_price.toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-semibold">
-                        -{item.avg_discount_pct.toFixed(1)}%
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-semibold">
+  if (!pricingData.length && !discountImpactData.length) {
+    return loading ? (
+      <div className="grid gap-4">
+        <Skeleton className="h-72 rounded-2xl" />
+        <Skeleton className="h-72 rounded-2xl" />
+      </div>
+    ) : (
+      <EmptyState icon={Tag} title="No pricing data for this scope" />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {pricingData.length > 0 ? (
+        <Panel>
+          <PanelHeader
+            icon={Tag}
+            title="Pricing and margin by category"
+            description="List price, how much of it is realized after discounts, and the margin left."
+          />
+          <DataTable className="mt-4">
+            <THead>
+              <tr>
+                <TH>Category</TH>
+                <TH align="right">List price</TH>
+                <TH align="right">Avg discount</TH>
+                <TH align="right">Price realization</TH>
+                <TH align="right">Margin</TH>
+                <TH align="right">Total sales</TH>
+                <TH align="right">Units</TH>
+              </tr>
+            </THead>
+            <TBody>
+              {pricingData.map((item) => (
+                <TR key={item.category}>
+                  <TD className="font-medium">{item.category}</TD>
+                  <TD align="right">{fmt.money2(item.avg_list_price)}</TD>
+                  <TD align="right" className="text-muted-foreground">
+                    −{item.avg_discount_pct.toFixed(1)}%
+                  </TD>
+                  <TD align="right">
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="tabular-nums">
                         {(item.price_realization * 100).toFixed(1)}%
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-800">
-                      {item.avg_margin_pct}%
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-600">
-                      ${item.total_sales.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-600">
-                      {item.total_units.toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Price vs Margin Chart */}
-      {pricingData.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-            <h4 className="text-lg font-semibold mb-4 text-gray-800">
-              List Price by Category
-            </h4>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={pricingData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="category"
-                  tick={{ fontSize: 12 }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(value) => `$${value.toFixed(2)}`} />
-                <Bar
-                  dataKey="avg_list_price"
-                  fill="#3b82f6"
-                  radius={[8, 8, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-            <h4 className="text-lg font-semibold mb-4 text-gray-800">
-              Margin % by Category
-            </h4>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={pricingData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  dataKey="category"
-                  tick={{ fontSize: 12 }}
-                  angle={-45}
-                  textAnchor="end"
-                  height={80}
-                />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(value) => `${value}%`} />
-                <Bar
-                  dataKey="avg_margin_pct"
-                  fill="#10b981"
-                  radius={[8, 8, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* Discount Impact Analysis */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <h3 className="text-lg font-semibold mb-4 text-gray-800">
-          <TrendingUp className="inline mr-2" size={20} />
-          Discount Effectiveness Analysis
-        </h3>
-
-        {discountImpactData.length > 0 && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {discountImpactData.map((item) => (
-                <div
-                  key={item.category}
-                  className="border border-gray-300 rounded-lg p-4"
-                >
-                  <h5 className="font-semibold text-gray-800 mb-3">
-                    {item.category}
-                  </h5>
-
-                  <div className="space-y-2 text-sm mb-4">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">
-                        Units with Discount:
-                      </span>
-                      <span className="font-semibold">
-                        {item.units_with_discount.toLocaleString()}
+                      <span className="h-1.5 w-14 overflow-hidden rounded-full bg-muted" aria-hidden>
+                        <span
+                          className="block h-full rounded-full bg-chart-1"
+                          style={{ width: `${Math.min(100, item.price_realization * 100)}%` }}
+                        />
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">
-                        Units without Discount:
-                      </span>
-                      <span className="font-semibold">
-                        {item.units_without_discount.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-blue-50 to-green-50 p-3 rounded-lg mb-3">
-                    <div className="text-xs text-gray-600 mb-1">
-                      Discount Lift
-                    </div>
-                    <div className="text-2xl font-bold text-green-600">
-                      {item.units_lift_pct > 0 ? "+" : ""}
-                      {item.units_lift_pct.toFixed(1)}%
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Incremental units from discounts
-                    </div>
-                  </div>
-
-                  <div className="text-xs space-y-1 text-gray-600">
-                    <div>
-                      Sales with discount: $
-                      {item.sales_with_discount.toLocaleString()}
-                    </div>
-                    <div>
-                      Sales without discount: $
-                      {item.sales_without_discount.toLocaleString()}
-                    </div>
-                    <div className="pt-2 border-t">
-                      Transactions: {item.transaction_count_discounted} vs{" "}
-                      {item.transaction_count_no_discount}
-                    </div>
-                  </div>
-                </div>
+                  </TD>
+                  <TD align="right" className="font-medium">
+                    {item.avg_margin_pct}%
+                  </TD>
+                  <TD align="right">{fmt.money(item.total_sales)}</TD>
+                  <TD align="right" className="text-muted-foreground">
+                    {fmt.int(item.total_units)}
+                  </TD>
+                </TR>
               ))}
+            </TBody>
+          </DataTable>
+        </Panel>
+      ) : null}
+
+      {pricingData.length > 0 ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Panel>
+            <PanelHeader icon={Tag} title="Average list price" />
+            <div className="px-2 pb-3 pt-4 sm:px-4">
+              <CategoryBars
+                data={pricingData}
+                dataKey="avg_list_price"
+                name="List price"
+                formatter={fmt.money2}
+                tickFormatter={(v) => `$${v}`}
+              />
+            </div>
+          </Panel>
+          <Panel>
+            <PanelHeader icon={Percent} title="Average margin" />
+            <div className="px-2 pb-3 pt-4 sm:px-4">
+              <CategoryBars
+                data={pricingData}
+                dataKey="avg_margin_pct"
+                name="Margin"
+                formatter={(v) => `${v}%`}
+                tickFormatter={(v) => `${v}%`}
+              />
+            </div>
+          </Panel>
+        </div>
+      ) : null}
+
+      {discountImpactData.length > 0 ? (
+        <Panel>
+          <PanelHeader
+            icon={TrendingUp}
+            title="Discount effectiveness"
+            description="Extra units sold when a discount is on, per category."
+          />
+          <div className="flex flex-col gap-5 p-5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {discountImpactData.map((item) => {
+                const up = item.units_lift_pct > 0;
+                const LiftIcon = up ? TrendingUp : TrendingDown;
+                return (
+                  <div key={item.category} className="flex flex-col gap-3 rounded-xl border p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-medium text-foreground">{item.category}</p>
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 text-sm font-semibold tabular-nums",
+                          up ? "text-good-ink" : "text-critical-ink"
+                        )}
+                      >
+                        <LiftIcon className="size-4" aria-hidden />
+                        {up ? "+" : ""}
+                        {item.units_lift_pct.toFixed(1)}%
+                        <span className="sr-only">unit lift</span>
+                      </span>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+                      <Metric label="Units, discounted" value={fmt.int(item.units_with_discount)} />
+                      <Metric label="Units, full price" value={fmt.int(item.units_without_discount)} />
+                      <Metric label="Sales, discounted" value={fmt.money(item.sales_with_discount)} />
+                      <Metric label="Sales, full price" value={fmt.money(item.sales_without_discount)} />
+                    </dl>
+                    <p className="border-t pt-2.5 text-xs text-muted-foreground">
+                      <span className="tabular-nums">{fmt.int(item.transaction_count_discounted)}</span>{" "}
+                      discounted vs{" "}
+                      <span className="tabular-nums">{fmt.int(item.transaction_count_no_discount)}</span>{" "}
+                      full-price transactions
+                    </p>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Summary Insights */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
-              <h5 className="font-semibold text-blue-900 mb-2">Key Insights</h5>
-              <ul className="text-sm text-blue-800 space-y-1">
-                <li>
-                  • Average discount lift across categories:{" "}
-                  <span className="font-semibold">
-                    {(
-                      discountImpactData.reduce(
-                        (sum, item) => sum + item.units_lift_pct,
-                        0
-                      ) / discountImpactData.length
-                    ).toFixed(1)}
-                    %
-                  </span>
-                </li>
-                <li>
-                  • Highest performing category:{" "}
-                  <span className="font-semibold">
-                    {
-                      discountImpactData.reduce((max, item) =>
-                        item.units_lift_pct > max.units_lift_pct ? item : max
-                      ).category
-                    }
-                  </span>
-                </li>
-              </ul>
-            </div>
+            {insights ? (
+              <InsightList
+                icon={Lightbulb}
+                title="Key insights"
+                items={[
+                  <>
+                    Average discount lift across categories is{" "}
+                    <span className="font-semibold text-foreground">
+                      {insights.avg.toFixed(1)}%
+                    </span>
+                    .
+                  </>,
+                  <>
+                    <span className="font-semibold text-foreground">{insights.best.category}</span>{" "}
+                    responds best to discounts (
+                    {insights.best.units_lift_pct > 0 ? "+" : ""}
+                    {insights.best.units_lift_pct.toFixed(1)}% units).
+                  </>,
+                ]}
+              />
+            ) : null}
           </div>
-        )}
-      </div>
+        </Panel>
+      ) : null}
     </div>
   );
 };

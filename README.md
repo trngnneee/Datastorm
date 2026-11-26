@@ -133,6 +133,26 @@ uvicorn server:app --reload --port 8001
 
 The AI/ML API will be available at `http://localhost:8001`
 
+### Preview the UI with mock data
+
+No database or backend needed: `mock-api/` serves seeded fake data with the same response shapes as `backend/app/main.py`, for every endpoint the frontend calls.
+
+**With Docker** (frontend on `http://localhost:3000`, mock API on `http://localhost:8000`):
+
+```bash
+docker compose -f docker-compose.mock.yml up -d --build
+docker compose -f docker-compose.mock.yml down        # stop
+```
+
+**Without Docker:**
+
+```bash
+node mock-api/server.mjs                                        # http://localhost:8000
+cd frontend && NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev
+```
+
+`MOCK_LATENCY_MS` (default `250`) adds a delay to every response so loading states are visible. The store map uses MapTiler when `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` is set, and OpenFreeMap's free basemap otherwise.
+
 ---
 
 ## API Documentation

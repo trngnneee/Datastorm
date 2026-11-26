@@ -1,93 +1,123 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
+import { useEffect, useState } from "react";
+import { Eye, Trophy } from "lucide-react";
 import { useGlobalLoading } from "../../../context/loadingContext";
-import { ShieldCheck } from "lucide-react";
+import { Panel, PanelHeader } from "@/components/dashboard/panel";
+import { EmptyState, Skeleton, StatusBadge } from "@/components/dashboard/feedback";
+import { CellBar, DataTable, TBody, TD, TH, THead, TR } from "@/components/dashboard/data-table";
+import { fmt } from "@/components/dashboard/chart-kit";
+import { cn } from "@/lib/utils";
 
 export const TopSKUProduct = () => {
   const [topProducts, setTopProducts] = useState([]);
-  const { startLoading, stopLoading, isLoading } = useGlobalLoading();
-  
+  const [loaded, setLoaded] = useState(false);
+  const { startLoading, stopLoading } = useGlobalLoading();
+
   useEffect(() => {
     const fetchData = async () => {
       startLoading();
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/sku/top?limit=10`)
-        .then((res) => res.json())
-        .then((data) => {
-          setTopProducts(data.data);
-        });
-      stopLoading();
-    }
-
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/sku/top?limit=10`);
+        const data = await res.json();
+        setTopProducts(data.data || []);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoaded(true);
+        stopLoading();
+      }
+    };
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  
+
+  const maxUnits = topProducts.length
+    ? Math.max(...topProducts.map((p) => p.units_sold || 0))
+    : 0;
+
   return (
-    <>
-      <div className="overflow-x-auto rounded-xl border border-slate-100">
-        <table className="min-w-full divide-y divide-slate-100">
-          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+    <Panel>
+      <PanelHeader
+        icon={Trophy}
+        title="Top 10 SKU-store pairs by units sold"
+        description="Best sellers burn through stock fastest, so they are on watch by default."
+      />
+      {topProducts.length > 0 ? (
+        <DataTable className="mt-4">
+          <THead>
             <tr>
-              <th className="px-4 py-3">No.</th>
-              <th className="px-4 py-3">SKU ID</th>
-              <th className="px-4 py-3">Product Name</th>
-              <th className="px-4 py-3">Supplier ID</th>
-              <th className="px-4 py-3">Store ID</th>
-              <th className="px-4 py-3">City</th>
-              <th className="px-4 py-3">Units Sold</th>
-              <th className="px-4 py-3">Net Sales</th>
-              <th className="px-4 py-3">Stock Opening</th>
-              <th className="px-4 py-3">Alert</th>
+              <TH className="w-12">#</TH>
+              <TH>Product</TH>
+              <TH>Supplier</TH>
+              <TH>Store</TH>
+              <TH align="right">Units sold</TH>
+              <TH align="right">Net sales</TH>
+              <TH align="right">Opening stock</TH>
+              <TH>Alert</TH>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
+          </THead>
+          <TBody>
             {topProducts.map((product, index) => (
-              <tr
-                key={`${product.sku_id}-${product.store_id}-${index}`}
-                className="hover:bg-slate-50"
-              >
-                <td className="px-4 py-3 font-semibold text-slate-900">
-                  {index + 1}
-                </td>
-                <td className="px-4 py-3">{product.sku_id ?? "—"}</td>
-                <td className="px-4 py-3">{product.sku_name ?? "—"}</td>
-                <td className="px-4 py-3">
-                  {product.supplier_id ?? "—"}
-                </td>
-                <td className="px-4 py-3">{product.store_id ?? "—"}</td>
-                <td className="px-4 py-3">{product.city ?? "—"}</td>
-                <td className="px-4 py-3">
-                  {product.units_sold ?? "—"}
-                </td>
-                <td className="px-4 py-3">
-                  {product.net_sales
-                    ? product.net_sales.toFixed(2)
-                    : "—"}
-                </td>
-                <td className="px-4 py-3">
-                  {product.stock_opening ?? "—"}
-                </td>
-                <td className="px-4 py-3">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 border border-amber-100">
-                    <ShieldCheck size={14} />
-                    Watch
+              <TR key={`${product.sku_id}-${product.store_id}-${index}`}>
+                <TD>
+                  <span
+                    className={cn(
+                      "grid size-6 place-items-center rounded-md text-xs font-semibold tabular-nums",
+                      index < 3 ? "bg-primary text-primary-foreground" : "bg-muted text-foreground/70"
+                    )}
+                  >
+                    {index + 1}
                   </span>
-                </td>
-              </tr>
+                </TD>
+                <TD>
+                  <p className="max-w-64 truncate font-medium text-foreground">
+                    {product.sku_name ?? "—"}
+                  </p>
+                  <p className="font-mono text-[11px] text-muted-foreground">
+                    {product.sku_id ?? "—"}
+                  </p>
+                </TD>
+                <TD mono>{product.supplier_id ?? "—"}</TD>
+                <TD>
+                  <p className="text-foreground">{product.city ?? "—"}</p>
+                  <p className="font-mono text-[11px] text-muted-foreground">
+                    {product.store_id ?? "—"}
+                  </p>
+                </TD>
+                <TD align="right">
+                  <CellBar
+                    value={product.units_sold || 0}
+                    max={maxUnits}
+                    label={fmt.int(product.units_sold)}
+                  />
+                </TD>
+                <TD align="right" className="font-medium">
+                  {product.net_sales ? fmt.money2(product.net_sales) : "—"}
+                </TD>
+                <TD align="right">{product.stock_opening ?? "—"}</TD>
+                <TD>
+                  <StatusBadge status="warning" icon={Eye}>
+                    Watch
+                  </StatusBadge>
+                </TD>
+              </TR>
             ))}
-            {!topProducts.length ? (
-              <tr>
-                <td
-                  colSpan={10}
-                  className="px-4 py-6 text-center text-slate-500"
-                >
-                  No top-selling SKUs available yet.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
-    </>
-  )
-}
+          </TBody>
+        </DataTable>
+      ) : (
+        <div className="p-5">
+          {loaded ? (
+            <EmptyState icon={Trophy} title="No top-selling SKUs available yet" />
+          ) : (
+            <div className="flex flex-col gap-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-11" />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+};

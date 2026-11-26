@@ -1,37 +1,40 @@
+/** Scale legend for the store map: size = net sales, color = stock-out rate. */
 export const MapLegend = () => {
   return (
-    <div className="absolute bottom-10 right-4 bg-white rounded-lg shadow-lg p-4 text-sm space-y-3">
-      {/* Size legend */}
+    <div className="absolute bottom-4 left-4 z-10 flex flex-col gap-3 rounded-xl border bg-card/95 p-3 text-xs shadow-lg backdrop-blur sm:flex-row sm:gap-5">
       <div>
-        <div className="font-semibold mb-1">Net Sales</div>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-gray-500"></div>
-          <span>Low</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full bg-gray-500"></div>
-          <span>Medium</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-gray-500"></div>
-          <span>High</span>
+        <p className="mb-1.5 font-medium text-foreground">Net sales</p>
+        <div className="flex items-end gap-3 text-muted-foreground">
+          {[
+            { size: 8, label: "Low" },
+            { size: 16, label: "Mid" },
+            { size: 26, label: "High" },
+          ].map((s) => (
+            <span key={s.label} className="flex flex-col items-center gap-1">
+              <span
+                aria-hidden
+                className="rounded-full border border-foreground/20 bg-foreground/10"
+                style={{ width: s.size, height: s.size }}
+              />
+              {s.label}
+            </span>
+          ))}
         </div>
       </div>
-
-      {/* Color legend */}
-      <div>
-        <div className="font-semibold mb-1">Stock-out rate</div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#22c55e]"></div>
-          <span>Low</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#f97316]"></div>
-          <span>Medium</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#ef4444]"></div>
-          <span>High</span>
+      <div className="min-w-44">
+        <p className="mb-1.5 font-medium text-foreground">Stock-out rate</p>
+        <div
+          aria-hidden
+          className="h-2 rounded-full"
+          style={{
+            background:
+              "linear-gradient(90deg, var(--status-good), var(--status-serious) 50%, var(--status-critical))",
+          }}
+        />
+        <div className="mt-1 flex justify-between tabular-nums text-muted-foreground">
+          <span>0%</span>
+          <span>50%</span>
+          <span>100%</span>
         </div>
       </div>
     </div>

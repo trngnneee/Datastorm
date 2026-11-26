@@ -1,0 +1,35 @@
+# Local UI preview with mock data — no database, no real backend.
+#
+#   docker compose -f docker-compose.mock.yml up --build
+#
+# Then open http://localhost:3000 (mock API on http://localhost:8000).
+# Optional: export NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=<maptiler key> for the
+# MapTiler basemap; without it the map uses OpenFreeMap's free style.
+
+name: datastorm-preview
+
+services:
+  mock-api:
+    build: ./mock-api
+    environment:
+      MOCK_LATENCY_MS: "250"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # The browser calls the API, so this is the host-side URL.
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN: ${NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      mock-api:
+        condition: service_healthy
