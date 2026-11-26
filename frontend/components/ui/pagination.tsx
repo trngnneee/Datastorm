@@ -3,14 +3,19 @@ import {
   ChevronRightIcon,
   MoreHorizontalIcon,
 } from "lucide-react";
+import { Root as PaginationRoot } from "@animate-ui/react/primitives/pagination";
 import type * as React from "react";
 
 import { cn } from "@/lib/utils";
-import { type Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 
-function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
+/** shadcn/ui pagination on Animate UI's Root: the current page's surface slides on `spring.selection`. */
+function Pagination({
+  className,
+  ...props
+}: React.ComponentProps<typeof PaginationRoot>) {
   return (
-    <nav
+    <PaginationRoot
       aria-label="pagination"
       className={cn("mx-auto flex w-full justify-center", className)}
       data-slot="pagination"
@@ -38,9 +43,8 @@ function PaginationItem({ ...props }: React.ComponentProps<"li">) {
 
 type PaginationLinkProps = {
   isActive?: boolean;
-  isDisabled?: boolean;
-} & Pick<React.ComponentProps<typeof Button>, "size"> &
-  React.ComponentProps<"a">;
+  size?: "default" | "icon" | "sm";
+} & React.ComponentProps<"button">;
 
 function PaginationLink({
   className,
@@ -49,13 +53,16 @@ function PaginationLink({
   ...props
 }: PaginationLinkProps) {
   return (
-    <a
+    <button
+      type="button"
       aria-current={isActive ? "page" : undefined}
       className={cn(
         buttonVariants({
           size,
           variant: isActive ? "outline" : "ghost",
         }),
+        "tabular-nums",
+        isActive ? "text-foreground" : "text-muted-foreground",
         className,
       )}
       data-active={isActive}
@@ -72,12 +79,12 @@ function PaginationPrevious({
   return (
     <PaginationLink
       aria-label="Go to previous page"
-      className={cn("gap-1 px-2.5 sm:pe-4", className)}
+      className={cn("gap-1 px-2.5 sm:pe-3.5", className)}
       size="default"
       {...props}
     >
-      <ChevronLeftIcon size={16} />
-      <span>Previous</span>
+      <ChevronLeftIcon size={16} aria-hidden />
+      <span className="hidden sm:inline">Previous</span>
     </PaginationLink>
   );
 }
@@ -89,12 +96,12 @@ function PaginationNext({
   return (
     <PaginationLink
       aria-label="Go to next page"
-      className={cn("gap-1 px-2.5 sm:ps-4", className)}
+      className={cn("gap-1 px-2.5 sm:ps-3.5", className)}
       size="default"
       {...props}
     >
-      <span>Next</span>
-      <ChevronRightIcon size={16} />
+      <span className="hidden sm:inline">Next</span>
+      <ChevronRightIcon size={16} aria-hidden />
     </PaginationLink>
   );
 }
@@ -106,7 +113,10 @@ function PaginationEllipsis({
   return (
     <span
       aria-hidden
-      className={cn("flex size-9 items-center justify-center", className)}
+      className={cn(
+        "flex size-9 items-center justify-center text-muted-foreground",
+        className,
+      )}
       data-slot="pagination-ellipsis"
       {...props}
     >

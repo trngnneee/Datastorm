@@ -1,19 +1,78 @@
-import React, { useEffect, useState } from "react";
-import { AlertTriangle, AlertCircle, TrendingDown } from "lucide-react";
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
+import { BellRing, PackageCheck, RefreshCw, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useGlobalLoading } from "../../../context/loadingContext";
+import { Metric, Panel, PanelHeader } from "@/components/dashboard/panel";
+import { EmptyState, Skeleton, StatusBadge } from "@/components/dashboard/feedback";
+import { SegmentedControl } from "@/components/dashboard/segmented-control";
+import { cn } from "@/lib/utils";
+
+const URGENCY = {
+  critical: { status: "critical", label: "Critical" },
+  warning: { status: "warning", label: "Warning" },
+};
+
+function AlertCard({ alert }) {
+  const u = URGENCY[alert.urgency] ?? { status: "info", label: "Info" };
+  const days = alert.days_until_stockout;
+  return (
+    <article
+      className={cn(
+        "flex flex-col gap-4 rounded-2xl border bg-card p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]",
+        alert.urgency === "critical" && "border-critical/30"
+      )}
+    >
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate font-semibold text-foreground">{alert.sku_name}</h3>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            <span className="font-mono">{alert.sku_id}</span> · {alert.store_id} · {alert.city}
+          </p>
+        </div>
+        <StatusBadge status={u.status}>{u.label}</StatusBadge>
+      </header>
+
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+        <Metric label="On hand" value={alert.current_stock} valueClassName="text-base" />
+        <Metric label="Safety stock" value={alert.safety_stock} valueClassName="text-base" />
+        <Metric
+          label="Runs out in"
+          value={`${days.toFixed(1)} days`}
+          valueClassName={cn("text-base", days < 1 ? "text-critical-ink" : "text-warning-ink")}
+        />
+        <Metric label="Lead time" value={`${alert.lead_time_days} days`} valueClassName="text-base" />
+      </dl>
+
+      <div className="flex items-center gap-3 rounded-xl bg-muted/70 px-3 py-2.5">
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-card text-primary ring-1 ring-border">
+          <ShoppingCart className="size-4" aria-hidden />
+        </span>
+        <p className="text-[13px] text-muted-foreground">
+          Recommended:{" "}
+          <span className="font-semibold text-foreground">
+            order <span className="tabular-nums">{alert.recommended_order_qty}</span> units now
+          </span>
+        </p>
+      </div>
+    </article>
+  );
+}
 
 export const StockAlerts = () => {
   const [alerts, setAlerts] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   const [filterUrgency, setFilterUrgency] = useState("all");
-  const [selectedCountry, setSelectedCountry] = useState("all");
+  const [selectedCountry] = useState("all");
+
+  const { startLoading, stopLoading, isLoading } = useGlobalLoading();
 
   useEffect(() => {
     fetchAlerts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterUrgency, selectedCountry]);
-
-  const { startLoading, stopLoading, isLoading } = useGlobalLoading();
 
   const fetchAlerts = async () => {
     startLoading();
@@ -27,142 +86,87 @@ export const StockAlerts = () => {
       toast.error("Failed to fetch stock alerts");
       console.error(error);
     } finally {
+      setLoaded(true);
       stopLoading();
     }
   };
 
-  const getUrgencyColor = (urgency) => {
-    switch (urgency) {
-      case "critical":
-        return "bg-red-50 border-red-300";
-      case "warning":
-        return "bg-yellow-50 border-yellow-300";
-      default:
-        return "bg-blue-50 border-blue-300";
-    }
-  };
-
-  const getUrgencyBadge = (urgency) => {
-    switch (urgency) {
-      case "critical":
-        return (
-          <span className="bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">
-            CRITICAL
-          </span>
-        );
-      case "warning":
-        return (
-          <span className="bg-yellow-500 text-white px-2 py-1 rounded text-xs font-bold">
-            WARNING
-          </span>
-        );
-      default:
-        return (
-          <span className="bg-blue-500 text-white px-2 py-1 rounded text-xs font-bold">
-            INFO
-          </span>
-        );
-    }
-  };
+  const counts = useMemo(
+    () => ({
+      critical: alerts.filter((a) => a.urgency === "critical").length,
+      warning: alerts.filter((a) => a.urgency === "warning").length,
+    }),
+    [alerts]
+  );
 
   return (
-    <div className="w-full">
-      <div className="mb-4 flex gap-4">
-        <div>
-          <label className="text-sm font-medium mr-5">Urgency Filter</label>
-          <select
-            value={filterUrgency}
-            onChange={(e) => setFilterUrgency(e.target.value)}
-            className="mt-1 px-3 py-2 border rounded-md text-sm"
-          >
-            <option value="all">All</option>
-            <option value="critical">Critical Only</option>
-            <option value="warning">Warning Only</option>
-          </select>
-        </div>
-        <Button onClick={fetchAlerts} disabled={isLoading} className="self-end bg-[var(--main-color)] hover:bg-[var(--main-hover)] text-white">
-          {isLoading ? "Loading..." : "Refresh"}
-        </Button>
-      </div>
-
-      {alerts.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <TrendingDown className="mx-auto mb-2 opacity-50" />
-          <p>No stock alerts at this time</p>
-        </div>
-      ) : (
-        <div className="space-y-3 max-h-150 overflow-y-auto">
-          {alerts.map((alert) => (
-            <div
-              key={`${alert.sku_id}-${alert.store_id}`}
-              className={`p-4 border-l-4 rounded ${getUrgencyColor(
-                alert.urgency
-              )}`}
+    <Panel>
+      <PanelHeader
+        icon={BellRing}
+        title="Inventory warnings"
+        description="SKUs that will run out before a new order can arrive."
+        actions={
+          <>
+            <SegmentedControl
+              ariaLabel="Filter by urgency"
+              value={filterUrgency}
+              onValueChange={setFilterUrgency}
+              size="sm"
+              options={[
+                { value: "all", label: "All" },
+                { value: "critical", label: "Critical" },
+                { value: "warning", label: "Warning" },
+              ]}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchAlerts}
+              disabled={isLoading}
+              aria-label="Refresh alerts"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    {alert.urgency === "critical" && (
-                      <AlertTriangle className="text-red-600" size={18} />
-                    )}
-                    {alert.urgency === "warning" && (
-                      <AlertCircle className="text-yellow-600" size={18} />
-                    )}
-                    <h3 className="font-bold">{alert.sku_name}</h3>
-                    {getUrgencyBadge(alert.urgency)}
-                  </div>
+              <RefreshCw
+                className={cn("size-3.5", isLoading && "animate-spin motion-reduce:animate-none")}
+                aria-hidden
+              />
+              Refresh
+            </Button>
+          </>
+        }
+      />
 
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <p className="text-gray-600">SKU ID</p>
-                      <p className="font-mono">{alert.sku_id}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">Store</p>
-                      <p>
-                        {alert.store_id} - {alert.city}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">Current Stock</p>
-                      <p className="font-bold text-lg">{alert.current_stock}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">Safety Stock</p>
-                      <p className="font-bold">{alert.safety_stock}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">Days Until Stockout</p>
-                      <p
-                        className={`font-bold ${
-                          alert.days_until_stockout < 1
-                            ? "text-red-600"
-                            : "text-yellow-600"
-                        }`}
-                      >
-                        {alert.days_until_stockout.toFixed(1)} days
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">Lead Time</p>
-                      <p>{alert.lead_time_days} days</p>
-                    </div>
-                  </div>
+      <div className="flex flex-col gap-4 p-5">
+        {alerts.length > 0 && filterUrgency === "all" ? (
+          <p className="text-[13px] text-muted-foreground">
+            <span className="font-semibold tabular-nums text-critical-ink">{counts.critical}</span>{" "}
+            critical and{" "}
+            <span className="font-semibold tabular-nums text-warning-ink">{counts.warning}</span>{" "}
+            warning alerts.
+          </p>
+        ) : null}
 
-                  <div className="mt-3 p-2 bg-white rounded border-l-2 border-blue-400">
-                    <p className="text-xs text-gray-600 mb-1">
-                      Recommended Action:
-                    </p>
-                    <p className="font-bold text-sm text-blue-700">
-                      Order {alert.recommended_order_qty} units immediately
-                    </p>
-                  </div>
-                </div>
-              </div>
+        {alerts.length === 0 ? (
+          loaded ? (
+            <EmptyState
+              icon={PackageCheck}
+              title="No stock alerts right now"
+              description="Every SKU-store is above its safety stock."
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-48 rounded-2xl" />
+              ))}
             </div>
-          ))}
-        </div>
-      )}
-    </div>
+          )
+        ) : (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {alerts.map((alert) => (
+              <AlertCard key={`${alert.sku_id}-${alert.store_id}`} alert={alert} />
+            ))}
+          </div>
+        )}
+      </div>
+    </Panel>
   );
 };

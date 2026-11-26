@@ -1,21 +1,50 @@
-import React, { useEffect, useState } from "react";
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  BarChart,
   Bar,
-  LineChart,
-  Line,
+  BarChart,
+  CartesianGrid,
+  ReferenceLine,
+  ResponsiveContainer,
+  Scatter,
+  ScatterChart,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  ScatterChart,
-  Scatter,
 } from "recharts";
+import {
+  AlertOctagon,
+  BarChart3,
+  CheckCircle2,
+  Clock,
+  Lightbulb,
+  PackageSearch,
+  ScatterChart as ScatterIcon,
+} from "lucide-react";
 import { useFilterStore } from "@/app/store/useFilterStore";
 import { toast } from "sonner";
-import { AlertCircle, CheckCircle, Clock } from "lucide-react";
+import { KpiCard } from "@/components/dashboard/kpi-card";
+import { Panel, PanelHeader } from "@/components/dashboard/panel";
+import { EmptyState, InsightList, Skeleton, StatusBadge } from "@/components/dashboard/feedback";
+import { SegmentedControl } from "@/components/dashboard/segmented-control";
+import { DataTable, TBody, TD, TH, THead, TR } from "@/components/dashboard/data-table";
+import {
+  ChartFrame,
+  ChartTooltip,
+  barCursor,
+  fmt,
+  gridProps,
+  useChartAnimation,
+  xAxisProps,
+  yAxisProps,
+} from "@/components/dashboard/chart-kit";
+
+const PRIORITY = {
+  High: { status: "critical", label: "Order now" },
+  Medium: { status: "warning", label: "Plan" },
+  Low: { status: "good", label: "Optimal" },
+};
 
 export const InventoryOptimization = () => {
   const selectedCountry = useFilterStore((state) => state.selectedCountry);
@@ -25,9 +54,11 @@ export const InventoryOptimization = () => {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("all");
+  const animate = useChartAnimation();
 
   useEffect(() => {
     fetchInventoryData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCountry, selectedYear]);
 
   const fetchInventoryData = async () => {
@@ -51,321 +82,245 @@ export const InventoryOptimization = () => {
     filter === "high"
       ? inventoryData.filter((i) => i.priority === "High")
       : filter === "medium"
-      ? inventoryData.filter((i) => i.priority === "Medium")
-      : filter === "optimal"
-      ? inventoryData.filter((i) => i.priority === "Low")
-      : inventoryData;
+        ? inventoryData.filter((i) => i.priority === "Medium")
+        : filter === "optimal"
+          ? inventoryData.filter((i) => i.priority === "Low")
+          : inventoryData;
 
-  const getStatusColor = (priority) => {
-    switch (priority) {
-      case "High":
-        return {
-          bg: "bg-red-50",
-          border: "border-red-200",
-          badge: "bg-red-100 text-red-700",
-        };
-      case "Medium":
-        return {
-          bg: "bg-yellow-50",
-          border: "border-yellow-200",
-          badge: "bg-yellow-100 text-yellow-700",
-        };
-      case "Low":
-        return {
-          bg: "bg-green-50",
-          border: "border-green-200",
-          badge: "bg-green-100 text-green-700",
-        };
-      default:
-        return {
-          bg: "bg-gray-50",
-          border: "border-gray-200",
-          badge: "bg-gray-100 text-gray-700",
-        };
-    }
-  };
+  const stats = useMemo(() => {
+    if (!inventoryData.length) return null;
+    return {
+      avgDays:
+        inventoryData.reduce((sum, i) => sum + i.days_of_stock, 0) / inventoryData.length,
+      overstock: inventoryData.filter((i) => i.days_of_stock > 30).length,
+    };
+  }, [inventoryData]);
 
-  const getStatusIcon = (priority) => {
-    switch (priority) {
-      case "High":
-        return <AlertCircle className="text-red-600" size={20} />;
-      case "Medium":
-        return <Clock className="text-yellow-600" size={20} />;
-      case "Low":
-        return <CheckCircle className="text-green-600" size={20} />;
-      default:
-        return null;
-    }
-  };
+  const scatterData = inventoryData.slice(0, 100);
+  const scatterMax = scatterData.length
+    ? Math.max(...scatterData.map((i) => Math.max(i.reorder_point, i.current_stock)))
+    : 0;
 
   return (
-    <div className="w-full space-y-6">
-      {/* Summary Cards */}
-      {summary && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gradient-to-br from-red-50 to-red-100 p-4 rounded-lg border border-red-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Order Now</p>
-                <p className="text-2xl font-bold text-red-700">
-                  {summary.high_priority_count}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Items below reorder point
-                </p>
-              </div>
-              <AlertCircle className="text-red-300" size={40} />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 p-4 rounded-lg border border-yellow-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Plan Replenishment</p>
-                <p className="text-2xl font-bold text-yellow-700">
-                  {summary.medium_priority_count}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Medium priority items
-                </p>
-              </div>
-              <Clock className="text-yellow-300" size={40} />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Optimal Stock</p>
-                <p className="text-2xl font-bold text-green-700">
-                  {summary.optimal_count}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">Well-stocked items</p>
-              </div>
-              <CheckCircle className="text-green-300" size={40} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Filter Tabs */}
-      <div className="flex gap-2 bg-white p-2 rounded-lg border border-gray-200">
-        {[
-          { label: "All Items", value: "all" },
-          { label: "High Priority", value: "high" },
-          { label: "Medium Priority", value: "medium" },
-          { label: "Optimal Stock", value: "optimal" },
-        ].map((tab) => (
-          <button
-            key={tab.value}
-            onClick={() => setFilter(tab.value)}
-            className={`px-4 py-2 rounded text-sm font-medium transition ${
-              filter === tab.value
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <KpiCard
+          label="Order now"
+          value={summary ? summary.high_priority_count : null}
+          icon={AlertOctagon}
+          tone="critical"
+          hint="Below reorder point"
+        />
+        <KpiCard
+          label="Plan replenishment"
+          value={summary ? summary.medium_priority_count : null}
+          icon={Clock}
+          tone="warning"
+          hint="Approaching reorder point"
+        />
+        <KpiCard
+          label="Optimal stock"
+          value={summary ? summary.optimal_count : null}
+          icon={CheckCircle2}
+          tone="good"
+          hint="Well stocked"
+        />
       </div>
 
-      {/* Inventory Detail Table */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <h3 className="text-lg font-semibold mb-4 text-gray-800">
-          Inventory Status & Recommendations
-        </h3>
-
+      <Panel>
+        <PanelHeader
+          icon={PackageSearch}
+          title="Stock status and recommendations"
+          description="Each SKU-store with its stock position and what to do next."
+          actions={
+            <SegmentedControl
+              ariaLabel="Filter by priority"
+              value={filter}
+              onValueChange={setFilter}
+              size="sm"
+              options={[
+                { value: "all", label: "All", count: inventoryData.length || null },
+                { value: "high", label: "High", count: summary?.high_priority_count ?? null },
+                { value: "medium", label: "Medium", count: summary?.medium_priority_count ?? null },
+                { value: "optimal", label: "Optimal", count: summary?.optimal_count ?? null },
+              ]}
+            />
+          }
+        />
         {filteredData.length > 0 ? (
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {filteredData.map((item, idx) => {
-              const colors = getStatusColor(item.priority);
-              const icon = getStatusIcon(item.priority);
-
-              return (
-                <div
-                  key={`${item.sku_id}-${item.store_id}`}
-                  className={`${colors.bg} ${colors.border} border rounded-lg p-4 hover:shadow-md transition`}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-start gap-3 flex-1">
-                      {icon}
-                      <div className="flex-1">
-                        <h5 className="font-semibold text-gray-800">
-                          {item.sku_name}
-                        </h5>
-                        <p className="text-xs text-gray-600">
-                          SKU: {item.sku_id} | Store: {item.store_id}
-                        </p>
-                      </div>
-                    </div>
-                    <span
-                      className={`${colors.badge} px-3 py-1 rounded-full text-xs font-semibold`}
-                    >
-                      {item.priority}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                    <div className="bg-white bg-opacity-50 p-2 rounded">
-                      <div className="text-xs text-gray-600">Current Stock</div>
-                      <div className="text-lg font-bold text-gray-800">
-                        {item.current_stock}
-                      </div>
-                    </div>
-                    <div className="bg-white bg-opacity-50 p-2 rounded">
-                      <div className="text-xs text-gray-600">Safety Stock</div>
-                      <div className="text-lg font-bold text-gray-800">
-                        {item.safety_stock}
-                      </div>
-                    </div>
-                    <div className="bg-white bg-opacity-50 p-2 rounded">
-                      <div className="text-xs text-gray-600">Reorder Point</div>
-                      <div className="text-lg font-bold text-gray-800">
-                        {item.reorder_point}
-                      </div>
-                    </div>
-                    <div className="bg-white bg-opacity-50 p-2 rounded">
-                      <div className="text-xs text-gray-600">Days of Stock</div>
-                      <div className="text-lg font-bold text-gray-800">
-                        {item.days_of_stock}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs mb-3">
-                    <div>
-                      <span className="text-gray-600">Avg Daily Sales:</span>
-                      <span className="font-semibold text-gray-800 ml-1">
-                        {item.avg_daily_sales} units
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Lead Time:</span>
-                      <span className="font-semibold text-gray-800 ml-1">
-                        {item.lead_time_days} days
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bg-white bg-opacity-70 rounded p-2 border border-gray-300">
-                    <p className="text-sm font-semibold text-gray-800">
-                      📋 Recommendation:{" "}
-                      <span className="text-blue-600">
-                        {item.recommendation}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <DataTable className="mt-4" maxHeight={460}>
+            <THead>
+              <tr>
+                <TH>Product</TH>
+                <TH>Status</TH>
+                <TH align="right">On hand</TH>
+                <TH align="right">Safety</TH>
+                <TH align="right">Reorder pt</TH>
+                <TH align="right">Days of stock</TH>
+                <TH align="right">Daily sales</TH>
+                <TH align="right">Lead time</TH>
+              </tr>
+            </THead>
+            <TBody>
+              {filteredData.map((item) => {
+                const p = PRIORITY[item.priority] ?? { status: "neutral", label: item.recommendation };
+                return (
+                  <TR key={`${item.sku_id}-${item.store_id}`}>
+                    <TD>
+                      <p className="max-w-56 truncate font-medium text-foreground">{item.sku_name}</p>
+                      <p className="font-mono text-[11px] text-muted-foreground">
+                        {item.sku_id} · {item.store_id}
+                      </p>
+                    </TD>
+                    <TD>
+                      <StatusBadge status={p.status}>{p.label}</StatusBadge>
+                    </TD>
+                    <TD align="right" className="font-semibold">
+                      {fmt.int(item.current_stock)}
+                    </TD>
+                    <TD align="right">{fmt.int(item.safety_stock)}</TD>
+                    <TD align="right">{fmt.int(item.reorder_point)}</TD>
+                    <TD align="right">{item.days_of_stock}</TD>
+                    <TD align="right">{item.avg_daily_sales}</TD>
+                    <TD align="right">{item.lead_time_days} d</TD>
+                  </TR>
+                );
+              })}
+            </TBody>
+          </DataTable>
         ) : (
-          <div className="text-center py-8 text-gray-500">
-            No inventory items found for selected filters
+          <div className="p-5">
+            {loading ? (
+              <Skeleton className="h-72" />
+            ) : (
+              <EmptyState
+                icon={PackageSearch}
+                title="No items match this filter"
+                description="Pick another priority, or widen the country and year."
+              />
+            )}
           </div>
         )}
-      </div>
+      </Panel>
 
-      {/* Stock Level Distribution */}
-      {inventoryData.length > 0 && (
-        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-          <h3 className="text-lg font-semibold mb-4 text-gray-800">
-            Stock Level Analysis
-          </h3>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <h4 className="text-md font-semibold mb-4 text-gray-700">
-                Current vs Reorder Point Distribution
-              </h4>
-              <ResponsiveContainer width="100%" height={250}>
-                <ScatterChart
-                  margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="reorder_point"
-                    name="Reorder Point"
-                    type="number"
-                  />
-                  <YAxis
-                    dataKey="current_stock"
-                    name="Current Stock"
-                    type="number"
-                  />
-                  <Tooltip
-                    cursor={{ strokeDasharray: "3 3" }}
-                    formatter={(value) => value.toFixed(0)}
-                  />
-                  <Scatter
-                    name="Items"
-                    data={inventoryData.slice(0, 100)}
-                    fill="#8884d8"
-                    isAnimationActive={false}
-                  />
-                </ScatterChart>
-              </ResponsiveContainer>
+      {inventoryData.length > 0 ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Panel>
+            <PanelHeader
+              icon={ScatterIcon}
+              title="On hand vs reorder point"
+              description="Below the dashed line = under the reorder point. First 100 items."
+            />
+            <div className="px-2 pb-3 pt-4 sm:px-4">
+              <ChartFrame height={280}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ScatterChart margin={{ top: 8, right: 16, left: 4, bottom: 8 }}>
+                    <CartesianGrid stroke="var(--chart-grid)" />
+                    <XAxis
+                      dataKey="reorder_point"
+                      name="Reorder point"
+                      type="number"
+                      {...xAxisProps}
+                      label={{ value: "Reorder point", position: "insideBottom", offset: -4, fontSize: 11, fill: "var(--muted-foreground)" }}
+                    />
+                    <YAxis
+                      dataKey="current_stock"
+                      name="On hand"
+                      type="number"
+                      {...yAxisProps}
+                    />
+                    <Tooltip
+                      cursor={{ stroke: "var(--chart-axis)", strokeDasharray: "0" }}
+                      content={<ChartTooltip valueFormatter={(v) => fmt.int(v)} />}
+                    />
+                    <ReferenceLine
+                      segment={[
+                        { x: 0, y: 0 },
+                        { x: scatterMax, y: scatterMax },
+                      ]}
+                      stroke="var(--chart-axis)"
+                      strokeDasharray="4 4"
+                      ifOverflow="extendDomain"
+                    />
+                    <Scatter
+                      name="Items"
+                      data={scatterData}
+                      fill="var(--chart-1)"
+                      fillOpacity={0.75}
+                      stroke="var(--card)"
+                      strokeWidth={2}
+                      isAnimationActive={false}
+                    />
+                  </ScatterChart>
+                </ResponsiveContainer>
+              </ChartFrame>
             </div>
+          </Panel>
 
-            <div>
-              <h4 className="text-md font-semibold mb-4 text-gray-700">
-                Days of Stock Distribution
-              </h4>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={inventoryData.slice(0, 15)}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="sku_id"
-                    tick={{ fontSize: 10 }}
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                  />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(value) => `${value.toFixed(1)} days`} />
-                  <Bar dataKey="days_of_stock" fill="#10b981" />
-                </BarChart>
-              </ResponsiveContainer>
+          <Panel>
+            <PanelHeader
+              icon={BarChart3}
+              title="Days of stock"
+              description="First 15 items."
+            />
+            <div className="px-2 pb-3 pt-4 sm:px-4">
+              <ChartFrame height={280}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={inventoryData.slice(0, 15)} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+                    <CartesianGrid {...gridProps} />
+                    <XAxis
+                      dataKey="sku_id"
+                      {...xAxisProps}
+                      interval={0}
+                      angle={-40}
+                      textAnchor="end"
+                      height={64}
+                      tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                    />
+                    <YAxis {...yAxisProps} />
+                    <Tooltip
+                      cursor={barCursor}
+                      content={<ChartTooltip valueFormatter={(v) => `${Number(v).toFixed(1)} days`} />}
+                    />
+                    <Bar
+                      dataKey="days_of_stock"
+                      name="Days of stock"
+                      fill="var(--chart-1)"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={28}
+                      isAnimationActive={animate}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartFrame>
             </div>
-          </div>
+          </Panel>
         </div>
-      )}
+      ) : null}
 
-      {/* Insights */}
-      {inventoryData.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h4 className="font-semibold text-blue-900 mb-3">
-            📊 Optimization Insights
-          </h4>
-          <ul className="text-sm text-blue-800 space-y-2">
-            <li>
-              •{" "}
-              <span className="font-semibold">
+      {stats && summary ? (
+        <InsightList
+          icon={Lightbulb}
+          title="Optimization insights"
+          items={[
+            <>
+              <span className="font-semibold text-foreground">
                 {summary.high_priority_count} items
               </span>{" "}
-              require immediate ordering to prevent stockouts
-            </li>
-            <li>
-              • Average days of stock:{" "}
-              <span className="font-semibold">
-                {(
-                  inventoryData.reduce((sum, i) => sum + i.days_of_stock, 0) /
-                  inventoryData.length
-                ).toFixed(1)}
-              </span>{" "}
-              days
-            </li>
-            <li>
-              • Items with more than 30 days of stock:{" "}
-              <span className="font-semibold">
-                {inventoryData.filter((i) => i.days_of_stock > 30).length}
-              </span>{" "}
-              (potential overstocking)
-            </li>
-          </ul>
-        </div>
-      )}
+              need ordering now to avoid stock-outs.
+            </>,
+            <>
+              Average days of stock is{" "}
+              <span className="font-semibold text-foreground">{stats.avgDays.toFixed(1)}</span>{" "}
+              days.
+            </>,
+            <>
+              <span className="font-semibold text-foreground">{stats.overstock}</span> items hold
+              more than 30 days of stock (possible overstock).
+            </>,
+          ]}
+        />
+      ) : null}
     </div>
   );
 };

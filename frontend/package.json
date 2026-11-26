@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@animate-ui/react": "^2.4.6",
     "@internationalized/date": "^3.10.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -16,9 +17,10 @@
     "framer-motion": "^12.25.0",
     "lucide-react": "^0.562.0",
     "maplibre-gl": "^5.15.0",
+    "motion": "^14.14.0",
     "next": "16.1.1",
     "papaparse": "^5.5.3",
-    "radix-ui": "^1.4.3",
+    "radix-ui": "^1.8.1",
     "react": "19.2.3",
     "react-aria-components": "^1.14.0",
     "react-dom": "19.2.3",

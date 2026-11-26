@@ -1,19 +1,73 @@
+"use client";
+
 import React, { useEffect, useState } from "react";
 import {
-  BarChart,
   Bar,
-  LineChart,
-  Line,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
 } from "recharts";
+import { Clock, DollarSign, Package, Trophy, Truck, Wallet } from "lucide-react";
 import { useFilterStore } from "@/app/store/useFilterStore";
 import { toast } from "sonner";
-import { Package, TrendingDown, Clock, DollarSign } from "lucide-react";
+import { KpiCard } from "@/components/dashboard/kpi-card";
+import { Panel, PanelHeader } from "@/components/dashboard/panel";
+import { EmptyState, Skeleton, StatusBadge } from "@/components/dashboard/feedback";
+import { DataTable, TBody, TD, TH, THead, TR } from "@/components/dashboard/data-table";
+import {
+  ChartFrame,
+  ChartTooltip,
+  barCursor,
+  fmt,
+  gridProps,
+  useChartAnimation,
+  xAxisProps,
+  yAxisProps,
+} from "@/components/dashboard/chart-kit";
+
+function RankBars({ data, dataKey, name, formatter, tickFormatter }) {
+  const animate = useChartAnimation();
+  return (
+    <ChartFrame height={Math.max(240, data.length * 30 + 40)}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          data={data}
+          layout="vertical"
+          margin={{ top: 4, right: 16, left: 4, bottom: 0 }}
+          barCategoryGap={6}
+        >
+          <CartesianGrid stroke="var(--chart-grid)" horizontal={false} />
+          <XAxis type="number" {...xAxisProps} tickFormatter={tickFormatter} />
+          <YAxis
+            type="category"
+            dataKey="supplier_id"
+            {...yAxisProps}
+            width={72}
+            tick={{ fontSize: 12, fill: "var(--foreground)" }}
+          />
+          <Tooltip cursor={barCursor} content={<ChartTooltip valueFormatter={formatter} />} />
+          <Bar
+            dataKey={dataKey}
+            name={name}
+            fill="var(--chart-1)"
+            radius={[0, 4, 4, 0]}
+            maxBarSize={18}
+            isAnimationActive={animate}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </ChartFrame>
+  );
+}
+
+function marginStatus(margin) {
+  if (margin > 25) return { status: "good", label: "Healthy" };
+  if (margin > 15) return { status: "warning", label: "Thin" };
+  return { status: "critical", label: "Low" };
+}
 
 export const SupplierPerformance = () => {
   const selectedCountry = useFilterStore((state) => state.selectedCountry);
@@ -21,9 +75,11 @@ export const SupplierPerformance = () => {
 
   const [supplierData, setSupplierData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const animate = useChartAnimation();
 
   useEffect(() => {
     fetchSupplierData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCountry, selectedYear]);
 
   const fetchSupplierData = async () => {
@@ -33,9 +89,7 @@ export const SupplierPerformance = () => {
         `${process.env.NEXT_PUBLIC_API_URL}/analytics/supplier?country=${selectedCountry}&year=${selectedYear}`
       );
       const json = await res.json();
-      setSupplierData(
-        (json.data || []).sort((a, b) => b.total_sales - a.total_sales)
-      );
+      setSupplierData((json.data || []).sort((a, b) => b.total_sales - a.total_sales));
     } catch (error) {
       toast.error("Failed to fetch supplier analytics");
       console.error(error);
@@ -44,254 +98,176 @@ export const SupplierPerformance = () => {
     }
   };
 
-  // Summary metrics
   const totalSuppliers = supplierData.length;
   const totalCost = supplierData.reduce((sum, s) => sum + s.total_cost, 0);
   const totalProfit = supplierData.reduce((sum, s) => sum + s.profit, 0);
-  const avgLeadTime =
-    supplierData.length > 0
-      ? (
-          supplierData.reduce((sum, s) => sum + s.avg_lead_time_days, 0) /
-          totalSuppliers
-        ).toFixed(1)
-      : 0;
+  const avgLeadTime = totalSuppliers
+    ? supplierData.reduce((sum, s) => sum + s.avg_lead_time_days, 0) / totalSuppliers
+    : 0;
+
+  const byProfit = [...supplierData].sort((a, b) => b.profit - a.profit).slice(0, 10);
+  const top10 = supplierData.slice(0, 10);
+  const ready = supplierData.length > 0;
 
   return (
-    <div className="w-full space-y-6">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Active Suppliers</p>
-              <p className="text-2xl font-bold text-blue-700">
-                {totalSuppliers}
-              </p>
-            </div>
-            <Package className="text-blue-300" size={32} />
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Profit</p>
-              <p className="text-2xl font-bold text-green-700">
-                ${(totalProfit / 1000000).toFixed(1)}M
-              </p>
-            </div>
-            <DollarSign className="text-green-300" size={32} />
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg border border-orange-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Avg Lead Time</p>
-              <p className="text-2xl font-bold text-orange-700">
-                {avgLeadTime} days
-              </p>
-            </div>
-            <Clock className="text-orange-300" size={32} />
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-red-50 to-red-100 p-4 rounded-lg border border-red-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Total Cost</p>
-              <p className="text-2xl font-bold text-red-700">
-                ${(totalCost / 1000000).toFixed(1)}M
-              </p>
-            </div>
-            <TrendingDown className="text-red-300" size={32} />
-          </div>
-        </div>
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Active suppliers" value={ready ? totalSuppliers : null} icon={Package} />
+        <KpiCard
+          label="Total profit"
+          prefix="$"
+          value={ready ? totalProfit / 1_000_000 : null}
+          decimals={1}
+          suffix="M"
+          icon={DollarSign}
+        />
+        <KpiCard
+          label="Avg lead time"
+          value={ready ? avgLeadTime : null}
+          decimals={1}
+          suffix="days"
+          icon={Clock}
+        />
+        <KpiCard
+          label="Total cost"
+          prefix="$"
+          value={ready ? totalCost / 1_000_000 : null}
+          decimals={1}
+          suffix="M"
+          icon={Wallet}
+        />
       </div>
 
-      {/* Supplier Detailed Table */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <h3 className="text-lg font-semibold mb-4 text-gray-800">
-          Supplier Performance Dashboard
-        </h3>
-
-        {supplierData.length > 0 ? (
-          <div className="overflow-x-auto max-h-100 overflow-y-scroll">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-700">
-                    Supplier ID
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    Products
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    Units
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    Total Cost
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    Total Sales
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    Profit
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    Lead Time
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    Cost/Unit
-                  </th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-700">
-                    Margin %
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {supplierData.map((supplier, idx) => {
-                  const profitMargin = (
-                    (supplier.profit / supplier.total_sales) *
-                    100
-                  ).toFixed(1);
-                  const profitColor =
-                    profitMargin > 25
-                      ? "green"
-                      : profitMargin > 15
-                      ? "yellow"
-                      : "red";
-
-                  return (
-                    <tr
-                      key={supplier.supplier_id}
-                      className="hover:bg-gray-50 transition"
+      <Panel>
+        <PanelHeader
+          icon={Truck}
+          title="Supplier scorecard"
+          description="Sorted by total sales. Margin status: healthy above 25%, thin above 15%."
+        />
+        {ready ? (
+          <DataTable className="mt-4" maxHeight={440}>
+            <THead>
+              <tr>
+                <TH>Supplier</TH>
+                <TH align="right">Products</TH>
+                <TH align="right">Units</TH>
+                <TH align="right">Total cost</TH>
+                <TH align="right">Total sales</TH>
+                <TH align="right">Profit</TH>
+                <TH align="right">Lead time</TH>
+                <TH align="right">Cost / unit</TH>
+                <TH align="right">Margin</TH>
+              </tr>
+            </THead>
+            <TBody>
+              {supplierData.map((s) => {
+                const margin = (s.profit / s.total_sales) * 100;
+                const { status, label } = marginStatus(margin);
+                return (
+                  <TR key={s.supplier_id}>
+                    <TD mono className="font-medium text-foreground">
+                      {s.supplier_id}
+                    </TD>
+                    <TD align="right">{s.products_supplied}</TD>
+                    <TD align="right">{fmt.int(s.total_units)}</TD>
+                    <TD align="right" className="text-muted-foreground">
+                      {fmt.money(s.total_cost)}
+                    </TD>
+                    <TD align="right" className="font-medium">
+                      {fmt.money(s.total_sales)}
+                    </TD>
+                    <TD
+                      align="right"
+                      className={s.profit > 0 ? "text-good-ink" : "text-critical-ink"}
                     >
-                      <td className="px-4 py-3 font-medium text-gray-800">
-                        {supplier.supplier_id}
-                      </td>
-                      <td className="px-4 py-3 text-right text-gray-600">
-                        {supplier.products_supplied}
-                      </td>
-                      <td className="px-4 py-3 text-right text-gray-600">
-                        {supplier.total_units.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3 text-right text-gray-600">
-                        ${supplier.total_cost.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold text-gray-800">
-                        ${supplier.total_sales.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-semibold ${
-                            supplier.profit > 0
-                              ? "bg-green-100 text-green-700"
-                              : "bg-red-100 text-red-700"
-                          }`}
-                        >
-                          ${supplier.profit.toLocaleString()}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-gray-600">
-                        {supplier.avg_lead_time_days.toFixed(1)} days
-                      </td>
-                      <td className="px-4 py-3 text-right text-gray-600">
-                        ${supplier.cost_per_unit.toFixed(2)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-semibold ${
-                            profitColor === "green"
-                              ? "bg-green-100 text-green-700"
-                              : profitColor === "yellow"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-red-100 text-red-700"
-                          }`}
-                        >
-                          {profitMargin}%
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      {fmt.money(s.profit)}
+                    </TD>
+                    <TD align="right">{fmt.days(s.avg_lead_time_days)}</TD>
+                    <TD align="right">{fmt.money2(s.cost_per_unit)}</TD>
+                    <TD align="right">
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="tabular-nums">{margin.toFixed(1)}%</span>
+                        <StatusBadge status={status}>{label}</StatusBadge>
+                      </div>
+                    </TD>
+                  </TR>
+                );
+              })}
+            </TBody>
+          </DataTable>
         ) : (
-          <div className="text-center py-8 text-gray-500">
-            No supplier data available
+          <div className="p-5">
+            {loading ? (
+              <Skeleton className="h-72" />
+            ) : (
+              <EmptyState icon={Truck} title="No supplier data available" />
+            )}
           </div>
         )}
-      </div>
+      </Panel>
 
-      {/* Comparison Charts */}
-      {supplierData.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-            <h4 className="text-lg font-semibold mb-4 text-gray-800">
-              Supplier Profit Ranking
-            </h4>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={supplierData.slice(0, 10)} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" tick={{ fontSize: 12 }} />
-                <YAxis
-                  dataKey="supplier_id"
-                  type="category"
-                  tick={{ fontSize: 12 }}
-                />
-                <Tooltip formatter={(value) => `$${value.toLocaleString()}`} />
-                <Bar dataKey="profit" fill="#10b981" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-            <h4 className="text-lg font-semibold mb-4 text-gray-800">
-              Lead Time by Supplier
-            </h4>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={supplierData.slice(0, 10)} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" tick={{ fontSize: 12 }} />
-                <YAxis
-                  dataKey="supplier_id"
-                  type="category"
-                  tick={{ fontSize: 12 }}
-                />
-                <Tooltip formatter={(value) => `${value.toFixed(1)} days`} />
-                <Bar dataKey="avg_lead_time_days" fill="#f59e0b" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
-      {/* Cost Analysis */}
-      {supplierData.length > 0 && (
-        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-          <h3 className="text-lg font-semibold mb-4 text-gray-800">
-            Cost Efficiency Analysis
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={supplierData.slice(0, 12)}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="supplier_id"
-                tick={{ fontSize: 12 }}
-                angle={-45}
-                textAnchor="end"
-                height={80}
+      {ready ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Panel>
+            <PanelHeader icon={Trophy} title="Top 10 suppliers by profit" />
+            <div className="px-2 pb-3 pt-4 sm:px-4">
+              <RankBars
+                data={byProfit}
+                dataKey="profit"
+                name="Profit"
+                formatter={fmt.money}
+                tickFormatter={fmt.moneyCompact}
               />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(value) => `$${value.toFixed(2)}`} />
-              <Legend />
-              <Bar dataKey="cost_per_unit" fill="#ef4444" name="Cost/Unit" />
-            </BarChart>
-          </ResponsiveContainer>
+            </div>
+          </Panel>
+          <Panel>
+            <PanelHeader
+              icon={Clock}
+              title="Lead time"
+              description="Top 10 suppliers by sales."
+            />
+            <div className="px-2 pb-3 pt-4 sm:px-4">
+              <RankBars
+                data={top10}
+                dataKey="avg_lead_time_days"
+                name="Lead time"
+                formatter={(v) => `${Number(v).toFixed(1)} days`}
+                tickFormatter={(v) => `${v}d`}
+              />
+            </div>
+          </Panel>
         </div>
-      )}
+      ) : null}
+
+      {ready ? (
+        <Panel>
+          <PanelHeader
+            icon={DollarSign}
+            title="Cost per unit"
+            description="Top 12 suppliers by sales."
+          />
+          <div className="px-2 pb-3 pt-4 sm:px-4">
+            <ChartFrame height={280}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={supplierData.slice(0, 12)} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+                  <CartesianGrid {...gridProps} />
+                  <XAxis dataKey="supplier_id" {...xAxisProps} interval={0} angle={-30} textAnchor="end" height={56} />
+                  <YAxis {...yAxisProps} tickFormatter={(v) => `$${v}`} />
+                  <Tooltip cursor={barCursor} content={<ChartTooltip valueFormatter={fmt.money2} />} />
+                  <Bar
+                    dataKey="cost_per_unit"
+                    name="Cost / unit"
+                    fill="var(--chart-1)"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={36}
+                    isAnimationActive={animate}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartFrame>
+          </div>
+        </Panel>
+      ) : null}
     </div>
   );
 };

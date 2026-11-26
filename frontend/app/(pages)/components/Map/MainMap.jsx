@@ -6,6 +6,13 @@ import { useEffect, useState } from "react";
 import { useGlobalLoading } from "../../../context/loadingContext";
 import { useFilterStore } from "@/app/store/useFilterStore";
 
+// MapTiler when a key is configured; otherwise OpenFreeMap's free, keyless
+// Positron style so local previews still render a basemap.
+const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN;
+const MAP_STYLE = MAPTILER_KEY
+  ? `https://api.maptiler.com/maps/topo-v4/style.json?key=${MAPTILER_KEY}`
+  : "https://tiles.openfreemap.org/styles/positron";
+
 export const MainMap = () => {
   const [zoom, setZoom] = useState(2);
   const [storePoints, setStorePoints] = useState([]);
@@ -61,7 +68,7 @@ export const MainMap = () => {
           minZoom={3}
           maxZoom={10}
           style={{ width: "100%", height: "100%" }}
-          mapStyle={`https://api.maptiler.com/maps/topo-v4/style.json?key=${process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN}`}
+          mapStyle={MAP_STYLE}
           zoom={zoom}
           onZoom={(e) => setZoom(e.viewState.zoom)}
         >
@@ -84,18 +91,19 @@ export const MainMap = () => {
                   ["linear"],
                   ["get", "stock_out_rate"],
                   0,
-                  "#22c55e",
+                  "#0aac23",
                   0.5,
-                  "#f97316",
+                  "#f18a59",
                   1,
-                  "#ef4444",
+                  "#dc3c3d",
                 ],
-                "circle-opacity": 0.75,
-                "circle-stroke-width": 1,
+                "circle-opacity": 0.8,
+                "circle-stroke-width": 1.5,
                 "circle-stroke-color": "#fff",
               }}
             />
           </Source>
+          {MAPTILER_KEY ? (
           <Source
             id="maptiler-v4"
             type="vector"
@@ -111,6 +119,7 @@ export const MainMap = () => {
               }}
             />
           </Source>
+          ) : null}
         </Map>
       )}
     </>

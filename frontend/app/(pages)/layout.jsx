@@ -1,19 +1,22 @@
 import { Suspense } from "react";
 import Chatbot from "./components/ChatBot";
-import { Header } from "./components/Header";
-import { Sider } from "./components/Sider";
+import { AppShell } from "./components/shell/AppShell";
 
-export default function MapLayout({ children }) {
+function ShellFallback() {
+  return (
+    <div className="grid min-h-dvh place-items-center text-sm text-muted-foreground">
+      Loading DataStorm…
+    </div>
+  );
+}
+
+export default function DashboardLayout({ children }) {
   return (
     <>
-      {/* <Header /> */}
-      <Suspense fallback={<div>Loading...</div>}>
-        <div className="pb-20 mt-20// relative">
-          <Sider />
-          <main className="ml-64 px-10 scroll-smooth">{children}</main>
-          <Chatbot />
-        </div>
+      <Suspense fallback={<ShellFallback />}>
+        <AppShell>{children}</AppShell>
       </Suspense>
+      <Chatbot />
     </>
   );
 }
